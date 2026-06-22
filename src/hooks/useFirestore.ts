@@ -34,11 +34,12 @@ export function useCollection<T>(apiEndpoint: string | null) {
   return { data, loading, error, refetch: fetchData };
 }
 
-export function useAddDoc(apiEndpoint: string) {
+export function useAddDoc(apiEndpoint: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const addDocument = async (data: any) => {
+    if (!apiEndpoint) throw new Error('No API endpoint provided');
     setLoading(true);
     setError(null);
     try {
@@ -60,11 +61,12 @@ export function useAddDoc(apiEndpoint: string) {
   return { addDoc: addDocument, addDocument, loading, error };
 }
 
-export function useUpdateDoc(apiEndpoint: string) {
+export function useUpdateDoc(apiEndpoint: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const updateDocument = async (id: string, data: any) => {
+    if (!apiEndpoint) throw new Error('No API endpoint provided');
     setLoading(true);
     setError(null);
     try {
@@ -85,11 +87,12 @@ export function useUpdateDoc(apiEndpoint: string) {
   return { updateDoc: updateDocument, updateDocument, loading, error };
 }
 
-export function useDeleteDoc(apiEndpoint: string) {
+export function useDeleteDoc(apiEndpoint: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const deleteDocument = async (id: string) => {
+    if (!apiEndpoint) throw new Error('No API endpoint provided');
     setLoading(true);
     setError(null);
     try {
