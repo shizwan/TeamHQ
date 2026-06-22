@@ -14,6 +14,8 @@ import { Calendar, AlertCircle, Clock, CalendarDays } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/ui/Pagination';
 
+type TabType = 'overdue' | 'today' | 'week' | 'upcoming';
+
 export default function DeadlinesPage() {
   const { user } = useAuth();
   const { addToast } = useToast();

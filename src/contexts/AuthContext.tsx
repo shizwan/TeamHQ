@@ -12,10 +12,12 @@ const dummyUser = {
 interface AuthContextValue {
   user: any;
   loading: boolean;
-  loginWithGoogle: () => Promise<void>;
-  loginWithEmail: (e: string, p: string) => Promise<void>;
-  registerWithEmail: (e: string, p: string) => Promise<void>;
-  logout: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (e: string, p: string) => Promise<void>;
+  signUpWithEmail: (e: string, p: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  error: string | null;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -23,6 +25,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const clearError = () => setError(null);
 
   useEffect(() => {
     // Simulate auth check
@@ -34,25 +39,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []);
 
-  const loginWithGoogle = async () => {
+  const signInWithGoogle = async () => {
     localStorage.setItem('auth_token', 'true');
     setUser(dummyUser);
   };
-  const loginWithEmail = async () => {
+  const signInWithEmail = async () => {
     localStorage.setItem('auth_token', 'true');
     setUser(dummyUser);
   };
-  const registerWithEmail = async () => {
+  const signUpWithEmail = async () => {
     localStorage.setItem('auth_token', 'true');
     setUser(dummyUser);
   };
-  const logout = async () => {
+  const signOut = async () => {
     localStorage.removeItem('auth_token');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, loginWithEmail, registerWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut, error, clearError }}>
       {children}
     </AuthContext.Provider>
   );
