@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 export default function RootPage() {
