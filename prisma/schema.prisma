@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+}
+
+model TeamMember {
+  id         String   @id @default(uuid())
+  userId     String   // The owner of this data
+  name       String
+  role       String
+  department String?
+  createdAt  DateTime @default(now())
+  tasks      Task[]   @relation("TeamMemberTasks")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  userId      String   // The owner of this data
+  title       String
+  description String?
+  status      String   @default("Active") // 'Active' | 'Completed' | 'Archived'
+  startDate   DateTime
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+  tasks       Task[]   @relation("ProjectTasks")
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  userId      String    // The owner of this data
+  projectId   String
+  assigneeId  String
+  title       String
+  status      String    @default("Pending") // 'Pending' | 'In Progress' | 'Completed' | 'Overdue'
+  startDate   DateTime
+  dueDate     DateTime
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project    @relation("ProjectTasks", fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    TeamMember @relation("TeamMemberTasks", fields: [assigneeId], references: [id], onDelete: Cascade)
+}
