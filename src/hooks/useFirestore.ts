@@ -49,7 +49,8 @@ export function useAddDoc(apiEndpoint: string | null) {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to add document');
-      return await res.json();
+      const json = await res.json();
+      return json.id || true;
     } catch (err: any) {
       setError(err.message);
       throw err;
@@ -76,6 +77,7 @@ export function useUpdateDoc(apiEndpoint: string | null) {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to update document');
+      return true;
     } catch (err: any) {
       setError(err.message);
       throw err;
@@ -100,6 +102,7 @@ export function useDeleteDoc(apiEndpoint: string | null) {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete document');
+      return true;
     } catch (err: any) {
       setError(err.message);
       throw err;
