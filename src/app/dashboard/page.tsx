@@ -6,7 +6,7 @@ import { FileText, CheckCircle2, Clock, AlertCircle, Database, TrendingUp, Trend
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
-import { isOverdue } from '@/lib/validation';
+import { isOverdue, calculatePerformanceData } from '@/lib/validation';
 import { useToast } from '@/contexts/ToastContext';
 import type { TeamMember, Task, Project, TaskMetrics, PerformanceData } from '@/types';
 import Header from '@/components/layout/Header';
@@ -43,43 +43,7 @@ export default function DashboardPage() {
   }, [tasks]);
 
   const performanceData: PerformanceData[] = useMemo(() => {
-    return team.map((member) => {
-      const memberTasks = tasks.filter((t) => t.assigneeId === member.id);
-      const completedTasks = memberTasks.filter((t) => t.status === 'Completed');
-      const completed = completedTasks.length;
-      const overdue = memberTasks.filter(
-        (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
-      ).length;
-      const inProgress = memberTasks.filter((t) => t.status === 'In Progress').length;
-      const pending = memberTasks.length - completed - overdue - inProgress;
-      const total = memberTasks.length;
-
-      const onTimeCompleted = completedTasks.filter(t => t.completedAt && t.completedAt <= t.dueDate).length + completedTasks.filter(t => !t.completedAt).length; // assume on-time if missing timestamp
-      const lateCompleted = completed - onTimeCompleted;
-      const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-      let score = completionRate;
-      score -= (overdue / (total || 1)) * 30; // -30% penalty
-      score += (onTimeCompleted / (completed || 1)) * 10; // +10% bonus
-      const efficiencyScore = total === 0 ? 0 : Math.max(0, Math.min(100, Math.round(score)));
-
-      return {
-        id: member.id,
-        name: member.name,
-        role: member.role,
-        department: member.department,
-        createdAt: member.createdAt,
-        completed,
-        overdue,
-        inProgress,
-        pending: Math.max(0, pending),
-        total,
-        completionRate,
-        onTimeCompleted,
-        lateCompleted,
-        efficiencyScore,
-      };
-    });
+    return calculatePerformanceData(team, tasks);
   }, [team, tasks]);
 
   const [nowTime, setNowTime] = React.useState(() => Date.now());
@@ -144,12 +108,18 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <MetricCard
           label="Total Projects"
           value={projects.length}
           icon={<FileText className="w-6 h-6 text-slate-600" />}
           colorClass="text-slate-800 bg-slate-100"
+        />
+        <MetricCard
+          label="Pending"
+          value={metrics.pending}
+          icon={<Clock className="w-6 h-6 text-indigo-500" />}
+          colorClass="text-indigo-600 bg-indigo-50"
         />
         <MetricCard
           label="Completed"

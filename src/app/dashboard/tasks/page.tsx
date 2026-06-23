@@ -10,6 +10,7 @@ import type { TeamMember, Task, Project, TaskStatus, NewTaskForm } from '@/types
 import Header from '@/components/layout/Header';
 import TaskGrid from '@/components/tasks/TaskGrid';
 import AddTaskForm from '@/components/tasks/AddTaskForm';
+import EditTaskModal from '@/components/tasks/EditTaskModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -31,6 +32,7 @@ export default function TasksPage() {
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
 
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
+  const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
 
   // Derive an active projects list since we can only assign tasks to active projects
   const activeProjects = useMemo(() => projects.filter(p => p.status === 'Active'), [projects]);
@@ -81,17 +83,33 @@ export default function TasksPage() {
         addToast('error', 'Failed to update status', 'Please try again.');
       }
     },
-    [updateDocument, addToast]
+    [updateDocument, addToast, refetchTasks]
+  );
+
+  const handleEditTask = useCallback(
+    async (taskId: string, data: Partial<Task>) => {
+      const success = await updateDocument(taskId, data);
+      if (success) {
+        addToast('success', 'Task updated', 'The task has been modified.');
+        setEditTaskTarget(null);
+        refetchTasks();
+      } else {
+        addToast('error', 'Failed to update task', 'Please try again later.');
+      }
+    },
+    [updateDocument, addToast, refetchTasks]
   );
 
   const handleDeleteTask = useCallback(async () => {
     if (!deleteTarget) return;
 
-    const success = await deleteDocument(deleteTarget.id);
-    if (success) {
-      addToast('success', 'Task deleted', `"${deleteTarget.title}" has been removed.`);
-      refetchTasks();
-    } else {
+    try {
+      const success = await deleteDocument(deleteTarget.id);
+      if (success) {
+        addToast('success', 'Task deleted', `"${deleteTarget.title}" has been removed.`);
+        refetchTasks();
+      }
+    } catch (error) {
       addToast('error', 'Failed to delete task', 'Please try again.');
     }
     setDeleteTarget(null);
@@ -132,6 +150,7 @@ export default function TasksPage() {
         projects={projects}
         team={team}
         onStatusChange={handleStatusChange}
+        onEdit={setEditTaskTarget}
         onDelete={handleRequestDelete}
       />
 
@@ -144,6 +163,16 @@ export default function TasksPage() {
         onConfirm={handleDeleteTask}
         onCancel={() => setDeleteTarget(null)}
         loading={deletingTask}
+      />
+
+      <EditTaskModal
+        isOpen={!!editTaskTarget}
+        onClose={() => setEditTaskTarget(null)}
+        task={editTaskTarget}
+        projects={projects}
+        team={team}
+        onSubmit={handleEditTask}
+        loading={false}
       />
     </>
   );

@@ -1,4 +1,5 @@
 import { MAX_NAME_LENGTH, MAX_TITLE_LENGTH, MAX_ROLE_LENGTH, MAX_DEPARTMENT_LENGTH } from '@/types';
+import type { TeamMember, Task, PerformanceData } from '@/types';
 
 export function sanitizeString(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
@@ -90,4 +91,52 @@ export function calculateTaskDelay(task: { dueDate: string; completedAt?: string
   }
   
   return { isDelayed: true, delayMs, delayString };
+}
+
+export function calculatePerformanceData(team: TeamMember[], tasks: Task[]): PerformanceData[] {
+  return team.map((member) => {
+    const memberTasks = tasks.filter((t) => t.assigneeId === member.id);
+    const completedTasks = memberTasks.filter((t) => t.status === 'Completed');
+    const completed = completedTasks.length;
+    const overdue = memberTasks.filter(
+      (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
+    ).length;
+    const inProgress = memberTasks.filter((t) => t.status === 'In Progress').length;
+    const pending = memberTasks.length - completed - overdue - inProgress;
+    const total = memberTasks.length;
+
+    const onTimeCompleted = completedTasks.filter(t => t.completedAt && t.completedAt <= t.dueDate).length + completedTasks.filter(t => !t.completedAt).length; // assume on-time if missing timestamp
+    const lateCompleted = completed - onTimeCompleted;
+    const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+    // Efficiency Score Calculation
+    let score = 100;
+    if (total > 0) {
+      // Penalty for overdue active tasks
+      const overduePenalty = (overdue / total) * 100;
+      score -= overduePenalty;
+
+      // Penalty for tasks that were completed late
+      const latePenalty = completed > 0 ? (lateCompleted / completed) * 20 : 0;
+      score -= latePenalty;
+    }
+    const efficiencyScore = Math.max(0, Math.min(100, Math.round(score)));
+
+    return {
+      id: member.id,
+      name: member.name,
+      role: member.role,
+      department: member.department,
+      createdAt: member.createdAt,
+      completed,
+      overdue,
+      inProgress,
+      pending: Math.max(0, pending),
+      total,
+      completionRate,
+      onTimeCompleted,
+      lateCompleted,
+      efficiencyScore,
+    };
+  });
 }

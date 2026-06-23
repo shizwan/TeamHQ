@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, Edit2 } from 'lucide-react';
+import { Search, Trash2, Edit2, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { PerformanceData } from '@/types';
 import { usePagination } from '@/hooks/usePagination';
@@ -32,12 +32,23 @@ export default function TeamTable({ performanceData, onDeleteMember, onEditMembe
     member.department.toLowerCase().includes(search.toLowerCase())
   );
 
-  const { currentItems, currentPage, totalPages, goToPage } = usePagination(filtered, 10);
+  const { 
+    currentItems, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(filtered, 10);
 
   // Reset to page 1 when search changes
   useEffect(() => {
     goToPage(1);
-  }, [search, goToPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   return (
     <div className="space-y-4">
@@ -130,7 +141,7 @@ export default function TeamTable({ performanceData, onDeleteMember, onEditMembe
                           >
                             {getInitial(member.name)}
                           </div>
-                          <span className="font-medium text-slate-800 group-hover:text-indigo-600 transition-colors">
+                          <span className="font-medium text-slate-800 group-hover:text-indigo-600 group-hover:underline transition-colors">
                             {member.name}
                           </span>
                         </Link>
@@ -176,6 +187,13 @@ export default function TeamTable({ performanceData, onDeleteMember, onEditMembe
                       {/* Actions */}
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
+                          <Link
+                            href={`/dashboard/team/${member.id}`}
+                            className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-colors hover:text-emerald-500 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+                            aria-label={`View member ${member.name}`}
+                          >
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          </Link>
                           <button
                             type="button"
                             onClick={() => onEditMember(member)}
@@ -202,9 +220,14 @@ export default function TeamTable({ performanceData, onDeleteMember, onEditMembe
           </table>
         </div>
         <Pagination 
-          currentPage={currentPage} 
-          totalPages={totalPages} 
+          currentPage={currentPage}
+          totalPages={totalPages}
           onPageChange={goToPage} 
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+          totalItems={totalItems}
+          startItem={startItem}
+          endItem={endItem}
         />
       </div>
     </div>

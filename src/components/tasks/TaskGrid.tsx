@@ -12,6 +12,7 @@ interface TaskGridProps {
   projects?: Project[];
   team: TeamMember[];
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
+  onEdit?: (task: Task) => void;
   onDelete: (taskId: string, title: string) => void;
 }
 
@@ -20,6 +21,7 @@ export default function TaskGrid({
   projects = [],
   team,
   onStatusChange,
+  onEdit,
   onDelete,
 }: TaskGridProps) {
   const [search, setSearch] = useState('');
@@ -54,12 +56,23 @@ export default function TaskGrid({
       );
   }, [tasks, search, selectedProjectId]);
 
-  const { currentItems: currentTasks, currentPage, totalPages, goToPage } = usePagination(filteredAndSorted, 9);
+  const { 
+    currentItems: currentTasks, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(filteredAndSorted, 10);
 
   // Reset to page 1 when search or filter changes
   useEffect(() => {
     goToPage(1);
-  }, [search, selectedProjectId, goToPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, selectedProjectId]);
 
   return (
     <div className="space-y-4">
@@ -115,6 +128,7 @@ export default function TaskGrid({
                 assigneeName={teamMap[task.assigneeId] ?? 'Unknown'}
                 projectName={projectMap[task.projectId]}
                 onStatusChange={onStatusChange}
+                onEdit={onEdit}
                 onDelete={onDelete}
               />
             ))}
@@ -123,6 +137,11 @@ export default function TaskGrid({
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={goToPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={setItemsPerPage}
+            totalItems={totalItems}
+            startItem={startItem}
+            endItem={endItem}
             className="rounded-xl shadow-sm border border-slate-200"
           />
         </div>

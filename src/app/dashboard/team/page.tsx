@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useAddDoc, useDeleteDoc, useUpdateDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
-import { sanitizeString, isOverdue } from '@/lib/validation';
+import { sanitizeString, isOverdue, calculatePerformanceData } from '@/lib/validation';
 import type { TeamMember, Task, PerformanceData, NewMemberForm } from '@/types';
 import Header from '@/components/layout/Header';
 import TeamTable from '@/components/team/TeamTable';
@@ -35,43 +35,7 @@ export default function TeamPage() {
   const [editTarget, setEditTarget] = React.useState<PerformanceData | null>(null);
 
   const performanceData: PerformanceData[] = useMemo(() => {
-    return team.map((member) => {
-      const memberTasks = tasks.filter((t) => t.assigneeId === member.id);
-      const completedTasks = memberTasks.filter((t) => t.status === 'Completed');
-      const completed = completedTasks.length;
-      const overdue = memberTasks.filter(
-        (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
-      ).length;
-      const inProgress = memberTasks.filter((t) => t.status === 'In Progress').length;
-      const pending = memberTasks.length - completed - overdue - inProgress;
-      const total = memberTasks.length;
-
-      const onTimeCompleted = completedTasks.filter(t => t.completedAt && t.completedAt <= t.dueDate).length + completedTasks.filter(t => !t.completedAt).length; // assume on-time if missing timestamp
-      const lateCompleted = completed - onTimeCompleted;
-      const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-      let score = completionRate;
-      score -= (overdue / (total || 1)) * 30; // -30% penalty
-      score += (onTimeCompleted / (completed || 1)) * 10; // +10% bonus
-      const efficiencyScore = total === 0 ? 0 : Math.max(0, Math.min(100, Math.round(score)));
-
-      return {
-        id: member.id,
-        name: member.name,
-        role: member.role,
-        department: member.department,
-        createdAt: member.createdAt,
-        completed,
-        overdue,
-        inProgress,
-        pending: Math.max(0, pending),
-        total,
-        completionRate,
-        onTimeCompleted,
-        lateCompleted,
-        efficiencyScore,
-      };
-    });
+    return calculatePerformanceData(team, tasks);
   }, [team, tasks]);
 
   // Derived Metrics
@@ -80,18 +44,16 @@ export default function TeamPage() {
   }, [performanceData]);
 
   const topPerformer = useMemo(() => {
-    if (performanceData.length === 0) return 'N/A';
-    const activeMembers = performanceData.filter((m) => m.total > 0);
-    if (activeMembers.length === 0) return 'N/A';
-    const sorted = [...activeMembers].sort((a, b) => b.completionRate - a.completionRate);
+    const active = performanceData.filter((m) => m.completed > 0);
+    if (active.length === 0) return 'None';
+    const sorted = [...active].sort((a, b) => b.efficiencyScore - a.efficiencyScore);
     return sorted[0].name.split(' ')[0];
   }, [performanceData]);
 
   const lowestPerformer = useMemo(() => {
-    if (performanceData.length === 0) return 'N/A';
-    const activeMembers = performanceData.filter((m) => m.total > 0);
-    if (activeMembers.length === 0) return 'N/A';
-    const sorted = [...activeMembers].sort((a, b) => a.completionRate - b.completionRate);
+    const active = performanceData.filter((m) => m.total > 0 && m.efficiencyScore < 100);
+    if (active.length === 0) return 'None';
+    const sorted = [...active].sort((a, b) => a.efficiencyScore - b.efficiencyScore);
     return sorted[0].name.split(' ')[0];
   }, [performanceData]);
 
@@ -114,9 +76,8 @@ export default function TeamPage() {
   }, [performanceData]);
 
   const topContributor = useMemo(() => {
-    if (performanceData.length === 0) return 'N/A';
     const activeMembers = performanceData.filter((m) => m.completed > 0);
-    if (activeMembers.length === 0) return 'N/A';
+    if (activeMembers.length === 0) return 'None';
     const sorted = [...activeMembers].sort((a, b) => b.completed - a.completed);
     return sorted[0].name.split(' ')[0];
   }, [performanceData]);

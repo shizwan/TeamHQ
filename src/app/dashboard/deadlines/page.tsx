@@ -148,7 +148,17 @@ export default function DeadlinesPage() {
     }
   }, [activeTab, groupedTasks]);
 
-  const { currentItems, currentPage, totalPages, goToPage } = usePagination(tasksForActiveTab, 9);
+  const { 
+    currentItems, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(tasksForActiveTab, 10);
 
   // Reset to page 1 when active tab changes
   useEffect(() => {
@@ -198,6 +208,11 @@ export default function DeadlinesPage() {
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={goToPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+          totalItems={totalItems}
+          startItem={startItem}
+          endItem={endItem}
           className="rounded-xl shadow-sm border border-slate-200"
         />
       </div>

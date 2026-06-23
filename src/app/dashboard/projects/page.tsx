@@ -44,7 +44,17 @@ export default function ProjectsPage() {
     });
   }, [projects, search, statusFilter]);
 
-  const { currentItems: currentProjects, currentPage, totalPages, goToPage } = usePagination(filteredProjects, 10);
+  const { 
+    currentItems: currentProjects, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(filteredProjects, 10);
 
   // Reset pagination when search or filters change
   useEffect(() => {
@@ -138,6 +148,11 @@ export default function ProjectsPage() {
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={goToPage}
+              itemsPerPage={itemsPerPage}
+              onItemsPerPageChange={setItemsPerPage}
+              totalItems={totalItems}
+              startItem={startItem}
+              endItem={endItem}
               className="rounded-xl shadow-sm border border-slate-200"
             />
           )}

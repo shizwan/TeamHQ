@@ -23,7 +23,17 @@ const MemberReport = React.memo(function MemberReport({
     [tasks, member.id]
   );
 
-  const { currentItems: currentTasks, currentPage, totalPages, goToPage } = usePagination(memberTasks, 6);
+  const { 
+    currentItems: currentTasks, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(memberTasks, 10);
 
   const projectMap = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -204,7 +214,12 @@ const MemberReport = React.memo(function MemberReport({
                   currentPage={currentPage}
                   totalPages={totalPages}
                   onPageChange={goToPage}
-                  className="bg-transparent border-t border-slate-200 !px-3 !py-2 shadow-none rounded-none rounded-b-xl"
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                  totalItems={totalItems}
+                  startItem={startItem}
+                  endItem={endItem}
+                  className="bg-transparent border-t-0 !px-0 !py-0 shadow-none rounded-none"
                 />
               </div>
             </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Trash2, Users } from 'lucide-react';
+import { Trash2, Users, Edit2 } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types';
 import { TASK_STATUSES } from '@/types';
 import { isOverdue } from '@/lib/validation';
@@ -13,6 +13,7 @@ interface TaskCardProps {
   projectName?: string;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onDelete: (taskId: string, title: string) => void;
+  onEdit?: (task: Task) => void;
 }
 
 function formatDate(dateString: string): string {
@@ -31,6 +32,7 @@ export default function TaskCard({
   projectName,
   onStatusChange,
   onDelete,
+  onEdit,
 }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
 
@@ -57,14 +59,26 @@ export default function TaskCard({
           </select>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onDelete(task.id, task.title)}
-          className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-all hover:text-rose-500 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 md:opacity-0 md:group-hover:opacity-100"
-          aria-label={`Delete task: ${task.title}`}
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(task)}
+              className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-all hover:text-indigo-500 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              aria-label={`Edit task: ${task.title}`}
+            >
+              <Edit2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onDelete(task.id, task.title)}
+            className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-all hover:text-rose-500 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+            aria-label={`Delete task: ${task.title}`}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       {/* Project Name & Title */}

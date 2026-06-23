@@ -5,7 +5,7 @@ import { Printer } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
-import { isOverdue } from '@/lib/validation';
+import { isOverdue, calculatePerformanceData } from '@/lib/validation';
 import type { TeamMember, Task, PerformanceData } from '@/types';
 import Header from '@/components/layout/Header';
 import EmptyState from '@/components/ui/EmptyState';
@@ -31,50 +31,25 @@ export default function ReportsPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => t.dueDate.startsWith(selectedMonth));
+  }, [tasks, selectedMonth]);
+
   const performanceData: PerformanceData[] = useMemo(() => {
-    return team.map((member) => {
-      const memberTasks = tasks.filter((t) => 
-        t.assigneeId === member.id && t.dueDate.startsWith(selectedMonth)
-      );
-      const completedTasks = memberTasks.filter((t) => t.status === 'Completed');
-      const completed = completedTasks.length;
-      
-      const overdue = memberTasks.filter(
-        (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
-      ).length;
-      const inProgress = memberTasks.filter((t) => t.status === 'In Progress').length;
-      const pending = memberTasks.length - completed - overdue - inProgress;
-      const total = memberTasks.length;
+    return calculatePerformanceData(team, filteredTasks);
+  }, [team, filteredTasks]);
 
-      const onTimeCompleted = completedTasks.filter(t => t.completedAt && t.completedAt <= t.dueDate).length + completedTasks.filter(t => !t.completedAt).length; // assume on-time if missing timestamp
-      const lateCompleted = completed - onTimeCompleted;
-      const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-      let score = completionRate;
-      score -= (overdue / (total || 1)) * 30; // -30% penalty
-      score += (onTimeCompleted / (completed || 1)) * 10; // +10% bonus
-      const efficiencyScore = total === 0 ? 0 : Math.max(0, Math.min(100, Math.round(score)));
-
-      return {
-        id: member.id,
-        name: member.name,
-        role: member.role,
-        department: member.department,
-        createdAt: member.createdAt,
-        completed,
-        overdue,
-        inProgress,
-        pending: Math.max(0, pending),
-        total,
-        completionRate,
-        onTimeCompleted,
-        lateCompleted,
-        efficiencyScore,
-      };
-    });
-  }, [team, tasks, selectedMonth]);
-
-  const { currentItems: currentMembers, currentPage, totalPages, goToPage } = usePagination(performanceData, 9);
+  const { 
+    currentItems: currentMembers, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(performanceData, 10);
 
   // Reset to page 1 when month changes
   React.useEffect(() => {
@@ -161,6 +136,11 @@ export default function ReportsPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={goToPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={setItemsPerPage}
+            totalItems={totalItems}
+            startItem={startItem}
+            endItem={endItem}
             className="rounded-xl shadow-sm border border-slate-200"
           />
         </div>

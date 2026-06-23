@@ -15,6 +15,7 @@ import MetricCard from '@/components/dashboard/MetricCard';
 import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
 import TaskCard from '@/components/tasks/TaskCard';
 import EditMemberModal from '@/components/team/EditMemberModal';
+import EditTaskModal from '@/components/tasks/EditTaskModal';
 import EmptyState from '@/components/ui/EmptyState';
 import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/ui/Pagination';
@@ -41,11 +42,22 @@ export default function TeammateProfilePage() {
   const { updateDocument: updateTeamMember, loading: updatingMember } = useUpdateDoc(teamPath);
 
   const [isEditing, setIsEditing] = React.useState(false);
+  const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
 
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
   const memberTasks = useMemo(() => tasks.filter((t) => t.assigneeId === id), [tasks, id]);
 
-  const { currentItems: currentTasks, currentPage, totalPages, goToPage } = usePagination(memberTasks, 6);
+  const { 
+    currentItems: currentTasks, 
+    currentPage, 
+    totalPages, 
+    goToPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    startItem,
+    endItem
+  } = usePagination(memberTasks, 10);
 
   const projectMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -108,6 +120,16 @@ export default function TeammateProfilePage() {
     await updateTask(taskId, updateData);
   };
 
+  const handleEditTask = async (taskId: string, data: Partial<Task>) => {
+    const success = await updateTask(taskId, data);
+    if (success) {
+      addToast('success', 'Task updated', 'The task has been modified.');
+      setEditTaskTarget(null);
+    } else {
+      addToast('error', 'Failed to update task', 'Please try again later.');
+    }
+  };
+
   const handleEditMember = async (memberId: string, data: { name: string; role: string; department: string }) => {
     const result = await updateTeamMember(memberId, data);
     if (result) {
@@ -119,7 +141,12 @@ export default function TeammateProfilePage() {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    await deleteDocument(taskId);
+    try {
+      await deleteDocument(taskId);
+      addToast('success', 'Task deleted', 'The task has been successfully removed.');
+    } catch (error) {
+      addToast('error', 'Failed to delete task', 'Please try again later.');
+    }
   };
 
   if (teamLoading || tasksLoading || projectsLoading) {
@@ -218,8 +245,9 @@ export default function TeammateProfilePage() {
                     key={task.id}
                     task={task}
                     assigneeName={member.name}
-                    projectName={projectMap[task.projectId]}
+                    projectName={projectMap[task.projectId || '']}
                     onStatusChange={handleStatusChange}
+                    onEdit={setEditTaskTarget}
                     onDelete={handleDeleteTask}
                   />
                 ))}
@@ -229,6 +257,11 @@ export default function TeammateProfilePage() {
                   currentPage={currentPage}
                   totalPages={totalPages}
                   onPageChange={goToPage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                  totalItems={totalItems}
+                  startItem={startItem}
+                  endItem={endItem}
                   className="bg-transparent border-t-0 !px-0 !py-0 shadow-none rounded-none"
                 />
               </div>
@@ -311,6 +344,16 @@ export default function TeammateProfilePage() {
         member={member}
         onSubmit={handleEditMember}
         loading={updatingMember}
+      />
+
+      <EditTaskModal
+        isOpen={!!editTaskTarget}
+        onClose={() => setEditTaskTarget(null)}
+        task={editTaskTarget}
+        projects={projects}
+        team={team}
+        onSubmit={handleEditTask}
+        loading={false}
       />
     </>
   );

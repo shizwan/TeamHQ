@@ -5,11 +5,26 @@ interface PaginationProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  itemsPerPage?: number;
+  onItemsPerPageChange?: (limit: number) => void;
+  totalItems?: number;
+  startItem?: number;
+  endItem?: number;
   className?: string;
 }
 
-export default function Pagination({ currentPage, totalPages, onPageChange, className = '' }: PaginationProps) {
-  if (totalPages <= 1) return null;
+export default function Pagination({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  itemsPerPage,
+  onItemsPerPageChange,
+  totalItems,
+  startItem,
+  endItem,
+  className = '' 
+}: PaginationProps) {
+  if (totalItems === 0) return null;
 
   return (
     <div className={`flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 rounded-b-xl ${className}`}>
@@ -30,11 +45,42 @@ export default function Pagination({ currentPage, totalPages, onPageChange, clas
         </button>
       </div>
       <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-        <div>
+        <div className="flex items-center gap-4">
           <p className="text-sm text-slate-700">
-            Showing page <span className="font-medium">{currentPage}</span> of{' '}
-            <span className="font-medium">{totalPages}</span>
+            {totalItems !== undefined && startItem !== undefined && endItem !== undefined ? (
+              <>
+                Showing <span className="font-medium">{startItem}</span> to <span className="font-medium">{endItem}</span> of{' '}
+                <span className="font-medium">{totalItems}</span> results
+              </>
+            ) : (
+              <>
+                Showing page <span className="font-medium">{currentPage}</span> of{' '}
+                <span className="font-medium">{totalPages}</span>
+              </>
+            )}
           </p>
+          
+          {itemsPerPage && onItemsPerPageChange && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="items-per-page" className="text-sm text-slate-600">Rows per page:</label>
+              <select
+                id="items-per-page"
+                value={itemsPerPage}
+                onChange={(e) => {
+                  onItemsPerPageChange(Number(e.target.value));
+                  onPageChange(1);
+                }}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+              </select>
+            </div>
+          )}
         </div>
         <div>
           <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
