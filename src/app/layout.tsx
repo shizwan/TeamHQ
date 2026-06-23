@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CynoHQ — Team Performance Tracker',
+  title: 'TeamHQ — Team Performance Tracker',
   description:
     'Track team performance, manage projects, monitor deadlines, and generate end-of-month reports. Built for managers who want clarity.',
   keywords: ['team management', 'performance tracking', 'project management', 'task tracker'],

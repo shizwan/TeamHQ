@@ -19,5 +19,5 @@ export default function RootPage() {
     }
   }, [user, loading, router]);
 
-  return <LoadingSpinner fullScreen message="Loading CynoHQ..." />;
+  return <LoadingSpinner fullScreen message="Loading TeamHQ..." />;
 }

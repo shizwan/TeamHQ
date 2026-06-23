@@ -18,7 +18,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [user, loading, router]);
 
   if (loading) {
-    return <LoadingSpinner fullScreen message="Connecting to CynoHQ..." />;
+    return <LoadingSpinner fullScreen message="Connecting to TeamHQ..." />;
   }
 
   if (!user) {

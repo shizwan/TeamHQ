@@ -6,7 +6,6 @@ import { FileText, CheckCircle2, Clock, AlertCircle, Database, TrendingUp, Trend
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
-import { seedDemoData } from '@/lib/seedData';
 import { isOverdue } from '@/lib/validation';
 import { useToast } from '@/contexts/ToastContext';
 import type { TeamMember, Task, Project, TaskMetrics, PerformanceData } from '@/types';
@@ -31,8 +30,6 @@ export default function DashboardPage() {
   const { data: tasks, loading: tasksLoading } = useCollection<Task>(
     userId ? getTasksCollectionPath(userId) : null
   );
-
-  const [seeding, setSeeding] = React.useState(false);
 
   const metrics: TaskMetrics = useMemo(() => {
     const total = tasks.length;
@@ -129,19 +126,6 @@ export default function DashboardPage() {
   }, [projects, tasks]);
 
 
-  const handleSeedData = async () => {
-    if (!userId) return;
-    setSeeding(true);
-    try {
-      await seedDemoData(userId);
-      addToast('success', 'Demo data loaded', 'Sample team and tasks have been added.');
-    } catch {
-      addToast('error', 'Failed to load demo data', 'Please try again.');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   if (teamLoading || projectsLoading || tasksLoading) {
     return <LoadingSpinner message="Loading dashboard..." />;
   }
@@ -154,13 +138,8 @@ export default function DashboardPage() {
         <div className="mb-6">
           <EmptyState
             icon={<Database className="w-12 h-12" />}
-            title="Welcome to CynoHQ!"
-            description="Your workspace is empty. Start by adding team members manually, or load demo data to explore the features."
-            action={{
-              label: seeding ? 'Loading...' : 'Load Demo Data',
-              onClick: handleSeedData,
-              loading: seeding,
-            }}
+            title="Welcome to TeamHQ!"
+            description="Your workspace is empty. Start by adding team members manually to begin."
           />
         </div>
       )}

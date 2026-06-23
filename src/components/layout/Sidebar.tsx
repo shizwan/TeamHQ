@@ -58,7 +58,7 @@ export default function Sidebar() {
       <div className="flex items-center justify-between border-b border-slate-800 p-6">
         <div className="flex items-center gap-3">
           <LayoutDashboard className="h-7 w-7 text-indigo-400" aria-hidden="true" />
-          <span className="text-xl font-bold tracking-tight text-white">CynoHQ</span>
+          <span className="text-xl font-bold tracking-tight text-white">TeamHQ</span>
         </div>
         {/* Mobile close button */}
         <button
