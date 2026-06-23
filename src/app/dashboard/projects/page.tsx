@@ -56,6 +56,7 @@ export default function ProjectsPage() {
       const now = new Date().toISOString();
       const result = await addProject({
         ...data,
+        userId,
         createdAt: now,
       });
 

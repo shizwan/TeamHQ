@@ -39,6 +39,7 @@ export default function TasksPage() {
     async (data: NewTaskForm) => {
       const now = new Date().toISOString();
       const result = await addTask({
+        userId,
         projectId: data.projectId,
         title: sanitizeString(data.title),
         assigneeId: data.assigneeId,

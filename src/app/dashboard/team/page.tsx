@@ -125,6 +125,7 @@ export default function TeamPage() {
   const handleAddMember = useCallback(
     async (data: NewMemberForm) => {
       const result = await addDocument({
+        userId,
         name: sanitizeString(data.name),
         role: sanitizeString(data.role),
         department: sanitizeString(data.department),
