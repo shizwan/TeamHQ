@@ -8,10 +8,12 @@ import { isOverdue } from '@/lib/validation';
 interface ProjectCardProps {
   project: Project;
   tasks: Task[];
+  onStatusChange?: (projectId: string, newStatus: Project['status']) => void;
 }
 
-export default function ProjectCard({ project, tasks }: ProjectCardProps) {
+export default function ProjectCard({ project, tasks, onStatusChange }: ProjectCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   const completed = tasks.filter((t) => t.status === 'Completed').length;
   const overdue = tasks.filter((t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)).length;
@@ -21,7 +23,7 @@ export default function ProjectCard({ project, tasks }: ProjectCardProps) {
   const progress = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-4 hover:shadow-md transition-shadow">
       <div 
         className="p-5 cursor-pointer hover:bg-slate-50 transition-colors" 
         onClick={() => setExpanded(!expanded)}
@@ -37,17 +39,71 @@ export default function ProjectCard({ project, tasks }: ProjectCardProps) {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span
-              className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                project.status === 'Active'
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : project.status === 'Completed'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {project.status}
-            </span>
+            {onStatusChange ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStatusMenuOpen(!statusMenuOpen);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full shadow-sm ring-1 ring-inset transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
+                    project.status === 'Active'
+                      ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100'
+                      : project.status === 'Completed'
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100'
+                      : 'bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    project.status === 'Active' ? 'bg-indigo-500' : project.status === 'Completed' ? 'bg-emerald-500' : 'bg-slate-500'
+                  }`} />
+                  {project.status}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${statusMenuOpen ? 'rotate-180' : ''} ${
+                    project.status === 'Active' ? 'text-indigo-400' : project.status === 'Completed' ? 'text-emerald-400' : 'text-slate-400'
+                  }`} />
+                </button>
+
+                {statusMenuOpen && (
+                  <div 
+                    className="absolute right-0 z-10 mt-1.5 w-32 origin-top-right rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="py-1">
+                      {['Active', 'Completed', 'Archived'].map((statusOption) => (
+                        <button
+                          key={statusOption}
+                          className={`block w-full px-4 py-2 text-left text-sm transition-colors ${
+                            project.status === statusOption
+                              ? 'bg-slate-50 text-indigo-600 font-semibold'
+                              : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStatusChange(project.id, statusOption as Project['status']);
+                            setStatusMenuOpen(false);
+                          }}
+                        >
+                          {statusOption}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span
+                className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                  project.status === 'Active'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : project.status === 'Completed'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-slate-100 text-slate-700'
+                }`}
+              >
+                {project.status}
+              </span>
+            )}
             {expanded ? (
               <ChevronUp className="w-5 h-5 text-slate-400" />
             ) : (
@@ -68,7 +124,7 @@ export default function ProjectCard({ project, tasks }: ProjectCardProps) {
       </div>
 
       {expanded && (
-        <div className="px-5 pb-5 border-t border-slate-100 bg-slate-50/50">
+        <div className="px-5 pb-5 border-t border-slate-100 bg-slate-50/50 rounded-b-xl">
           {/* Progress Bar */}
           <div className="mt-4 mb-2">
             <div className="flex justify-between text-sm mb-1.5">

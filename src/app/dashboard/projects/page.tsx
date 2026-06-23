@@ -3,7 +3,7 @@
 import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCollection, useAddDoc } from '@/hooks/useFirestore';
+import { useCollection, useAddDoc, useUpdateDoc } from '@/hooks/useFirestore';
 import { getProjectsCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import type { Task, Project, NewProjectForm } from '@/types';
@@ -27,6 +27,7 @@ export default function ProjectsPage() {
   const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
   
   const { addDocument: addProject, loading: addingProject } = useAddDoc(projectsPath);
+  const { updateDocument } = useUpdateDoc(projectsPath);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -78,7 +79,20 @@ export default function ProjectsPage() {
         addToast('error', 'Failed to create project', 'Please try again.');
       }
     },
-    [addProject, addToast, goToPage]
+    [addProject, addToast, goToPage, refetchProjects]
+  );
+
+  const handleStatusChange = useCallback(
+    async (projectId: string, newStatus: Project['status']) => {
+      const success = await updateDocument(projectId, { status: newStatus });
+      if (success) {
+        addToast('success', 'Project status updated', `Changed status to ${newStatus}.`);
+        refetchProjects();
+      } else {
+        addToast('error', 'Failed to update project', 'Please try again.');
+      }
+    },
+    [updateDocument, addToast, refetchProjects]
   );
 
   if (projectsLoading || tasksLoading) {
@@ -140,6 +154,7 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 tasks={tasks.filter((t) => t.projectId === project.id)}
+                onStatusChange={handleStatusChange}
               />
             ))}
           </div>
