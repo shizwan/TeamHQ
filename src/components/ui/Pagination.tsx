@@ -44,9 +44,9 @@ export default function Pagination({
           Next
         </button>
       </div>
-      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <p className="text-sm text-slate-700">
+      <div className="hidden sm:flex sm:flex-1 sm:flex-wrap sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <p className="text-sm text-slate-700 whitespace-nowrap">
             {totalItems !== undefined && startItem !== undefined && endItem !== undefined ? (
               <>
                 Showing <span className="font-medium">{startItem}</span> to <span className="font-medium">{endItem}</span> of{' '}
@@ -93,7 +93,7 @@ export default function Pagination({
               <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             </button>
             
-            <div className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300">
+            <div className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 whitespace-nowrap">
               {currentPage} / {totalPages}
             </div>
 

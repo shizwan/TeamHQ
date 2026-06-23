@@ -143,19 +143,17 @@ export default function ProjectsPage() {
               />
             ))}
           </div>
-          {totalPages > 1 && (
-            <Pagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={goToPage}
-              itemsPerPage={itemsPerPage}
-              onItemsPerPageChange={setItemsPerPage}
-              totalItems={totalItems}
-              startItem={startItem}
-              endItem={endItem}
-              className="rounded-xl shadow-sm border border-slate-200"
-            />
-          )}
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={setItemsPerPage}
+            totalItems={totalItems}
+            startItem={startItem}
+            endItem={endItem}
+            className="rounded-xl shadow-sm border border-slate-200"
+          />
         </div>
       )}
     </>
