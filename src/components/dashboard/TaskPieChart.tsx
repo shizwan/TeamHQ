@@ -38,8 +38,8 @@ export default function TaskPieChart({ metrics }: TaskPieChartProps) {
     { name: 'Pending', value: metrics.pending },
   ];
 
-  const pieData = rawData.filter((entry) => entry.value > 0);
-  const allZero = pieData.length === 0;
+  const allZero = rawData.every((entry) => entry.value === 0);
+  const pieData = rawData;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

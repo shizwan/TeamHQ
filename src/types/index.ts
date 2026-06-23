@@ -107,9 +107,9 @@ export const STATUS_STYLES: Record<TaskStatus, string> = {
 };
 
 export const PIE_COLORS: Record<TaskStatus, string> = {
-  'In Progress': '#3b82f6',
-  'Completed': '#10b981',
-  'Overdue': '#f43f5e',
+  'In Progress': '#6260f3', // Brand Primary
+  'Completed': '#00c7e2', // Brand Secondary (Cyan)
+  'Overdue': '#6b60ec',
   'Pending': '#94a3b8',
 };
 

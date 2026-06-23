@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -57,7 +58,9 @@ export default function Sidebar() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 p-6">
         <div className="flex items-center gap-3">
-          <LayoutDashboard className="h-7 w-7 text-indigo-400" aria-hidden="true" />
+          <div className="relative h-10 w-10 overflow-hidden rounded-xl shadow-sm border border-slate-700/50">
+            <Image src="/logo.png" alt="TeamHQ Icon" fill sizes="40px" className="object-cover scale-[1.65]" priority />
+          </div>
           <span className="text-xl font-bold tracking-tight text-white">TeamHQ</span>
         </div>
         {/* Mobile close button */}

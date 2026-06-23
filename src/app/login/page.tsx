@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
@@ -44,10 +45,11 @@ function LoginForm() {
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Logo & Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/30 mb-4">
-            <LayoutDashboard className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg mb-4 bg-slate-900 border border-slate-700/50">
+            <div className="relative w-10 h-10 overflow-hidden rounded-xl">
+              <Image src="/logo.png" alt="TeamHQ Logo" fill sizes="40px" className="object-cover scale-[1.65]" priority />
+            </div>
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">TeamHQ</h1>
           <p className="text-indigo-300/80 mt-2 text-sm">
