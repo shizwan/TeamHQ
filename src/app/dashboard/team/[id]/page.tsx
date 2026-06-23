@@ -2,10 +2,11 @@
 
 import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, User, Briefcase, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, User, Briefcase, AlertTriangle, CheckCircle2, Edit2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
+import { useToast } from '@/contexts/ToastContext';
 import { isOverdue, calculateTaskDelay } from '@/lib/validation';
 import type { TeamMember, Task, PerformanceData, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
@@ -13,6 +14,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import MetricCard from '@/components/dashboard/MetricCard';
 import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
 import TaskCard from '@/components/tasks/TaskCard';
+import EditMemberModal from '@/components/team/EditMemberModal';
 import EmptyState from '@/components/ui/EmptyState';
 import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/ui/Pagination';
@@ -22,20 +24,23 @@ export default function TeammateProfilePage() {
   const router = useRouter();
   const id = params.id as string;
   const { user } = useAuth();
+  const { addToast } = useToast();
   const userId = user?.uid || '';
 
-  const { data: team, loading: teamLoading } = useCollection<TeamMember>(
-    userId ? getTeamCollectionPath(userId) : null
-  );
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(
-    userId ? getTasksCollectionPath(userId) : null
-  );
+  const teamPath = userId ? getTeamCollectionPath(userId) : null;
+  const tasksPath = userId ? getTasksCollectionPath(userId) : null;
+
+  const { data: team, loading: teamLoading, refetch: refetchTeam } = useCollection<TeamMember>(teamPath);
+  const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(
     userId ? getProjectsCollectionPath(userId) : null
   );
 
-  const { updateDocument } = useUpdateDoc(userId ? getTasksCollectionPath(userId) : null);
-  const { deleteDocument } = useDeleteDoc(userId ? getTasksCollectionPath(userId) : null);
+  const { updateDocument: updateTask } = useUpdateDoc(tasksPath);
+  const { deleteDocument } = useDeleteDoc(tasksPath);
+  const { updateDocument: updateTeamMember, loading: updatingMember } = useUpdateDoc(teamPath);
+
+  const [isEditing, setIsEditing] = React.useState(false);
 
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
   const memberTasks = useMemo(() => tasks.filter((t) => t.assigneeId === id), [tasks, id]);
@@ -100,7 +105,17 @@ export default function TeammateProfilePage() {
       updateData.completedAt = null;
     }
 
-    await updateDocument(taskId, updateData);
+    await updateTask(taskId, updateData);
+  };
+
+  const handleEditMember = async (memberId: string, data: { name: string; role: string; department: string }) => {
+    const result = await updateTeamMember(memberId, data);
+    if (result) {
+      addToast('success', 'Profile updated', 'Team member details have been saved.');
+      refetchTeam();
+    } else {
+      addToast('error', 'Failed to update', 'Please try again later.');
+    }
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -140,10 +155,19 @@ export default function TeammateProfilePage() {
         Back to Team
       </button>
 
-      <Header
-        title={member.name}
-        description={`${member.role} ${member.department ? `• ${member.department}` : ''}`}
-      />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <Header
+          title={member.name}
+          description={`${member.role} ${member.department ? `• ${member.department}` : ''}`}
+        />
+        <button
+          onClick={() => setIsEditing(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
+        >
+          <Edit2 className="w-4 h-4" />
+          Edit Profile
+        </button>
+      </div>
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -280,6 +304,14 @@ export default function TeammateProfilePage() {
           </div>
         </div>
       </div>
+
+      <EditMemberModal
+        isOpen={isEditing}
+        onClose={() => setIsEditing(false)}
+        member={member}
+        onSubmit={handleEditMember}
+        loading={updatingMember}
+      />
     </>
   );
 }

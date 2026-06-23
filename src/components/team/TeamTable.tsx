@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2 } from 'lucide-react';
+import { Search, Trash2, Edit2 } from 'lucide-react';
 import Link from 'next/link';
 import type { PerformanceData } from '@/types';
 import { usePagination } from '@/hooks/usePagination';
@@ -10,6 +10,7 @@ import Pagination from '@/components/ui/Pagination';
 interface TeamTableProps {
   performanceData: PerformanceData[];
   onDeleteMember: (id: string, name: string) => void;
+  onEditMember: (member: PerformanceData) => void;
 }
 
 function getCompletionColor(rate: number): string {
@@ -22,7 +23,7 @@ function getInitial(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
-export default function TeamTable({ performanceData, onDeleteMember }: TeamTableProps) {
+export default function TeamTable({ performanceData, onDeleteMember, onEditMember }: TeamTableProps) {
   const [search, setSearch] = useState('');
 
   const filtered = performanceData.filter((member) =>
@@ -174,14 +175,24 @@ export default function TeamTable({ performanceData, onDeleteMember }: TeamTable
 
                       {/* Actions */}
                       <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => onDeleteMember(member.id, member.name)}
-                          className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-colors hover:text-rose-500 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
-                          aria-label={`Delete member ${member.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onEditMember(member)}
+                            className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-colors hover:text-indigo-500 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                            aria-label={`Edit member ${member.name}`}
+                          >
+                            <Edit2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteMember(member.id, member.name)}
+                            className="inline-flex items-center rounded-md p-1.5 text-slate-400 transition-colors hover:text-rose-500 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                            aria-label={`Delete member ${member.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

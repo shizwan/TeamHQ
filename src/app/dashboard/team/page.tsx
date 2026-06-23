@@ -3,7 +3,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { Users, Briefcase, Award, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCollection, useAddDoc, useDeleteDoc } from '@/hooks/useFirestore';
+import { useCollection, useAddDoc, useDeleteDoc, useUpdateDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { sanitizeString, isOverdue } from '@/lib/validation';
@@ -11,6 +11,7 @@ import type { TeamMember, Task, PerformanceData, NewMemberForm } from '@/types';
 import Header from '@/components/layout/Header';
 import TeamTable from '@/components/team/TeamTable';
 import AddMemberForm from '@/components/team/AddMemberForm';
+import EditMemberModal from '@/components/team/EditMemberModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import MetricCard from '@/components/dashboard/MetricCard';
@@ -28,8 +29,10 @@ export default function TeamPage() {
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
   const { addDocument, loading: addingMember } = useAddDoc(teamPath);
   const { deleteDocument, loading: deletingMember } = useDeleteDoc(teamPath);
+  const { updateDocument, loading: updatingMember } = useUpdateDoc(teamPath);
 
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string } | null>(null);
+  const [editTarget, setEditTarget] = React.useState<PerformanceData | null>(null);
 
   const performanceData: PerformanceData[] = useMemo(() => {
     return team.map((member) => {
@@ -142,6 +145,19 @@ export default function TeamPage() {
     [addDocument, addToast]
   );
 
+  const handleEditMember = useCallback(
+    async (id: string, data: { name: string; role: string; department: string }) => {
+      const result = await updateDocument(id, data);
+      if (result) {
+        addToast('success', 'Member updated', `${sanitizeString(data.name)}'s details have been updated.`);
+        refetchTeam();
+      } else {
+        addToast('error', 'Failed to update member', 'Please try again.');
+      }
+    },
+    [updateDocument, addToast, refetchTeam]
+  );
+
   const handleDeleteMember = useCallback(async () => {
     if (!deleteTarget) return;
 
@@ -237,7 +253,7 @@ export default function TeamPage() {
       {/* Team Table */}
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">Team Members</h2>
-        <TeamTable performanceData={performanceData} onDeleteMember={handleRequestDelete} />
+        <TeamTable performanceData={performanceData} onDeleteMember={handleRequestDelete} onEditMember={setEditTarget} />
       </div>
 
       <ConfirmDialog
@@ -253,6 +269,14 @@ export default function TeamPage() {
         onConfirm={handleDeleteMember}
         onCancel={() => setDeleteTarget(null)}
         loading={deletingMember}
+      />
+
+      <EditMemberModal
+        isOpen={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        member={editTarget ? team.find(m => m.id === editTarget.id) || null : null}
+        onSubmit={handleEditMember}
+        loading={updatingMember}
       />
     </>
   );
