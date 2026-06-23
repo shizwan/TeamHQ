@@ -114,7 +114,6 @@ export const PIE_COLORS: Record<TaskStatus, string> = {
 };
 
 // ─── Constants ──────────────────────────────────────────────────
-export const MAX_TEAM_SIZE = 25;
 export const MAX_NAME_LENGTH = 100;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_ROLE_LENGTH = 80;

@@ -23,7 +23,7 @@ export default function ProjectsPage() {
   const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
   const tasksPath = userId ? getTasksCollectionPath(userId) : null;
 
-  const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
+  const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useCollection<Project>(projectsPath);
   const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
   
   const { addDocument: addProject, loading: addingProject } = useAddDoc(projectsPath);
@@ -61,6 +61,7 @@ export default function ProjectsPage() {
 
       if (result) {
         addToast('success', 'Project created', `"${data.title}" has been created.`);
+        refetchProjects();
         goToPage(1); // Jump to first page to see the new project (assuming sorting puts it there, or just as a reset)
       } else {
         addToast('error', 'Failed to create project', 'Please try again.');

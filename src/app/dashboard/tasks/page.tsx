@@ -24,7 +24,7 @@ export default function TasksPage() {
 
   const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
   
   const { addDocument: addTask, loading: addingTask } = useAddDoc(tasksPath);
   const { updateDocument } = useUpdateDoc(tasksPath);
@@ -50,6 +50,7 @@ export default function TasksPage() {
 
       if (result) {
         addToast('success', 'Task assigned', `"${data.title}" has been created.`);
+        refetchTasks();
       } else {
         addToast('error', 'Failed to create task', 'Please try again.');
       }
@@ -74,6 +75,7 @@ export default function TasksPage() {
 
       if (success) {
         addToast('info', 'Status updated', `Task marked as "${newStatus}".`);
+        refetchTasks();
       } else {
         addToast('error', 'Failed to update status', 'Please try again.');
       }
@@ -87,6 +89,7 @@ export default function TasksPage() {
     const success = await deleteDocument(deleteTarget.id);
     if (success) {
       addToast('success', 'Task deleted', `"${deleteTarget.title}" has been removed.`);
+      refetchTasks();
     } else {
       addToast('error', 'Failed to delete task', 'Please try again.');
     }

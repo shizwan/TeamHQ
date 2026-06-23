@@ -7,7 +7,6 @@ import { useCollection, useAddDoc, useDeleteDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { sanitizeString, isOverdue } from '@/lib/validation';
-import { MAX_TEAM_SIZE } from '@/types';
 import type { TeamMember, Task, PerformanceData, NewMemberForm } from '@/types';
 import Header from '@/components/layout/Header';
 import TeamTable from '@/components/team/TeamTable';
@@ -25,8 +24,8 @@ export default function TeamPage() {
   const teamPath = userId ? getTeamCollectionPath(userId) : null;
   const tasksPath = userId ? getTasksCollectionPath(userId) : null;
 
-  const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: team, loading: teamLoading, refetch: refetchTeam } = useCollection<TeamMember>(teamPath);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
   const { addDocument, loading: addingMember } = useAddDoc(teamPath);
   const { deleteDocument, loading: deletingMember } = useDeleteDoc(teamPath);
 
@@ -125,11 +124,6 @@ export default function TeamPage() {
 
   const handleAddMember = useCallback(
     async (data: NewMemberForm) => {
-      if (team.length >= MAX_TEAM_SIZE) {
-        addToast('warning', 'Team is full', `Maximum ${MAX_TEAM_SIZE} members allowed.`);
-        return;
-      }
-
       const result = await addDocument({
         name: sanitizeString(data.name),
         role: sanitizeString(data.role),
@@ -139,11 +133,12 @@ export default function TeamPage() {
 
       if (result) {
         addToast('success', 'Member added', `${sanitizeString(data.name)} has been added to the team.`);
+        refetchTeam();
       } else {
         addToast('error', 'Failed to add member', 'Please try again.');
       }
     },
-    [team.length, addDocument, addToast]
+    [addDocument, addToast]
   );
 
   const handleDeleteMember = useCallback(async () => {
@@ -152,6 +147,7 @@ export default function TeamPage() {
     const success = await deleteDocument(deleteTarget.id);
     if (success) {
       addToast('success', 'Member removed', `${deleteTarget.name} has been removed.`);
+      refetchTeam();
     } else {
       addToast('error', 'Failed to remove member', 'Please try again.');
     }
@@ -183,8 +179,8 @@ export default function TeamPage() {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
-          label="Total Roster"
-          value={`${team.length} / ${MAX_TEAM_SIZE}`}
+          label="Total Members"
+          value={team.length}
           icon={<Users className="h-6 w-6" />}
           colorClass="text-indigo-600 bg-indigo-50"
         />
@@ -237,9 +233,9 @@ export default function TeamPage() {
         <PerformanceBarChart data={performanceData} />
       </div>
 
-      {/* Roster Table */}
+      {/* Team Table */}
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Detailed Roster</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">Team Members</h2>
         <TeamTable performanceData={performanceData} onDeleteMember={handleRequestDelete} />
       </div>
 
