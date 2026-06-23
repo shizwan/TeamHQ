@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import type { PerformanceData, Task, Project } from '@/types';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { calculateTaskDelay } from '@/lib/validation';
 import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/ui/Pagination';
 
@@ -76,6 +77,29 @@ const MemberReport = React.memo(function MemberReport({
 
           {member.total > 0 ? (
             <ul className="space-y-2 text-sm text-slate-700">
+              {(() => {
+                const delayedTasks = memberTasks.map(t => calculateTaskDelay(t)).filter(d => d.isDelayed);
+                if (delayedTasks.length > 0) {
+                  const totalDelayMs = delayedTasks.reduce((acc, curr) => acc + curr.delayMs, 0);
+                  const hours = Math.floor(totalDelayMs / (1000 * 60 * 60));
+                  const days = Math.floor(hours / 24);
+                  const remainingHours = hours % 24;
+                  let str = '';
+                  if (days > 0) str += `${days} day${days > 1 ? 's' : ''}`;
+                  if (remainingHours > 0) {
+                    if (str) str += ', ';
+                    str += `${remainingHours} hour${remainingHours > 1 ? 's' : ''}`;
+                  }
+                  if (!str) str = '< 1 hour';
+                  return (
+                    <li className="flex items-start gap-2 bg-rose-50 border border-rose-100 p-2 rounded-lg text-rose-800 font-medium">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" aria-hidden="true" />
+                      This teammate has caused a total accumulated delay of {str} across {delayedTasks.length} task{delayedTasks.length !== 1 ? 's' : ''}.
+                    </li>
+                  );
+                }
+                return null;
+              })()}
               {member.overdue > 0 && (
                 <li className="flex items-start gap-2">
                   <span
@@ -149,8 +173,21 @@ const MemberReport = React.memo(function MemberReport({
                       </span>
                     </div>
                     <div className="flex flex-col items-end gap-1 ml-4 shrink-0">
-                      <StatusBadge status={task.status} />
-                      <span className="text-xs text-slate-500 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const delay = calculateTaskDelay(task);
+                          if (delay.isDelayed) {
+                            return (
+                              <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                + {delay.delayString}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <StatusBadge status={task.status} />
+                      </div>
+                      <span className="text-xs text-slate-500 whitespace-nowrap mt-0.5">
                         {new Date(task.dueDate).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',

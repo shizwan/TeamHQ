@@ -60,3 +60,34 @@ export function getTodayString(): string {
   const localISODate = new Date(Date.now() - tzOffset).toISOString().split('T')[0];
   return localISODate;
 }
+
+export function calculateTaskDelay(task: { dueDate: string; completedAt?: string | null; status: string }): { isDelayed: boolean; delayMs: number; delayString: string } {
+  const due = new Date(task.dueDate).getTime();
+  let end = Date.now();
+  if (task.status === 'Completed' && task.completedAt) {
+    end = new Date(task.completedAt).getTime();
+  }
+  
+  if (end <= due) {
+    return { isDelayed: false, delayMs: 0, delayString: '' };
+  }
+  
+  const delayMs = end - due;
+  const hours = Math.floor(delayMs / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  
+  let delayString = '';
+  if (days > 0) {
+    delayString += `${days} day${days > 1 ? 's' : ''}`;
+  }
+  if (remainingHours > 0) {
+    if (delayString) delayString += ', ';
+    delayString += `${remainingHours} hour${remainingHours > 1 ? 's' : ''}`;
+  }
+  if (!delayString) {
+    delayString = '< 1 hour';
+  }
+  
+  return { isDelayed: true, delayMs, delayString };
+}

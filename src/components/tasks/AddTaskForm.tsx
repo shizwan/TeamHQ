@@ -38,8 +38,8 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
       return;
     }
 
-    const combinedStart = `${startDate}T${startTime}`;
-    const combinedDue = `${dueDate}T${dueTime}`;
+    const combinedStart = new Date(`${startDate}T${startTime}`).toISOString();
+    const combinedDue = new Date(`${dueDate}T${dueTime}`).toISOString();
 
     const validationError = validateTaskForm({ 
       title, 

@@ -39,8 +39,8 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
       return;
     }
 
-    const combinedStart = `${startDate}T${startTime}`;
-    const combinedDue = dueDate && dueTime ? `${dueDate}T${dueTime}` : null;
+    const combinedStart = new Date(`${startDate}T${startTime}`).toISOString();
+    const combinedDue = dueDate && dueTime ? new Date(`${dueDate}T${dueTime}`).toISOString() : null;
 
     if (combinedDue && new Date(combinedStart).getTime() >= new Date(combinedDue).getTime()) {
       setError('Start time must be before the due time.');
