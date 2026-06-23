@@ -145,7 +145,7 @@ export default function IndividualReportPage() {
         description={`Performance review for ${formattedMonth}`}
       />
 
-      <div className="mt-8 max-w-4xl">
+      <div className="mt-8">
         <MemberReport member={performance} tasks={memberTasks} projects={projects} />
       </div>
     </>

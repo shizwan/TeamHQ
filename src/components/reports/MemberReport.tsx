@@ -44,8 +44,9 @@ const MemberReport = React.memo(function MemberReport({
   }, [projects]);
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-      {/* Header */}
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        {/* Header */}
       <div className="mb-4">
         <h3 className="text-lg font-bold text-slate-800">{member.name}</h3>
         <p className="text-sm text-slate-500">{member.role}</p>
@@ -77,9 +78,8 @@ const MemberReport = React.memo(function MemberReport({
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left: Manager Talking Points */}
+      {/* Manager Talking Points */}
+      <div className="mb-8">
         <div>
           <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">
             Manager Talking Points
@@ -155,10 +155,12 @@ const MemberReport = React.memo(function MemberReport({
             </div>
           )}
         </div>
+        </div>
+      </div>
 
-        {/* Right: Task Breakdown */}
-        <div className="flex flex-col">
-          <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">
+      {/* Task Breakdown */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+          <h4 className="mb-4 text-lg font-bold text-slate-800">
             Task Breakdown
           </h4>
 
@@ -225,7 +227,6 @@ const MemberReport = React.memo(function MemberReport({
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 });
