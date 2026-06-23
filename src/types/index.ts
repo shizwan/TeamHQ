@@ -27,7 +27,7 @@ export interface Project {
   description: string;
   status: ProjectStatus;
   startDate: string;
-  dueDate: string;
+  dueDate?: string | null;
   createdAt: string;
 }
 
@@ -36,7 +36,7 @@ export interface NewProjectForm {
   description: string;
   status: ProjectStatus;
   startDate: string;
-  dueDate: string;
+  dueDate?: string | null;
 }
 
 // ─── Task ───────────────────────────────────────────────────────

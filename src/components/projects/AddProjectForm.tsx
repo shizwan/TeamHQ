@@ -29,15 +29,20 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
       return;
     }
 
-    if (!startDate || !startTime || !dueDate || !dueTime) {
-      setError('Both start and due dates and times are required.');
+    if (!startDate || !startTime) {
+      setError('Start date and time are required.');
+      return;
+    }
+
+    if ((dueDate && !dueTime) || (!dueDate && dueTime)) {
+      setError('Both due date and due time must be provided if you want to set a deadline.');
       return;
     }
 
     const combinedStart = `${startDate}T${startTime}`;
-    const combinedDue = `${dueDate}T${dueTime}`;
+    const combinedDue = dueDate && dueTime ? `${dueDate}T${dueTime}` : null;
 
-    if (new Date(combinedStart).getTime() >= new Date(combinedDue).getTime()) {
+    if (combinedDue && new Date(combinedStart).getTime() >= new Date(combinedDue).getTime()) {
       setError('Start time must be before the due time.');
       return;
     }
@@ -135,12 +140,11 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">
-              Due Date & Time <span className="text-rose-500">*</span>
+              Due Date & Time (Optional)
             </label>
             <div className="flex gap-2">
               <input
                 type="date"
-                required
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
@@ -148,7 +152,6 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
               />
               <input
                 type="time"
-                required
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"

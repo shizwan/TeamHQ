@@ -62,7 +62,7 @@ export default function ProjectCard({ project, tasks }: ProjectCardProps) {
             <span className="font-semibold text-slate-600">Start:</span> {new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </div>
           <div>
-            <span className="font-semibold text-slate-600">Due:</span> {new Date(project.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            <span className="font-semibold text-slate-600">Due:</span> {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No deadline'}
           </div>
         </div>
       </div>

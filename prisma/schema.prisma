@@ -31,7 +31,7 @@ model Project {
   description String?
   status      String   @default("Active") // 'Active' | 'Completed' | 'Archived'
   startDate   DateTime
-  dueDate     DateTime
+  dueDate     DateTime?
   createdAt   DateTime @default(now())
   tasks       Task[]   @relation("ProjectTasks")
 }
