@@ -32,7 +32,7 @@ export default function TeammateProfilePage() {
   const tasksPath = userId ? getTasksCollectionPath(userId) : null;
 
   const { data: team, loading: teamLoading, refetch: refetchTeam } = useCollection<TeamMember>(teamPath);
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(
     userId ? getProjectsCollectionPath(userId) : null
   );
@@ -117,7 +117,13 @@ export default function TeammateProfilePage() {
       updateData.completedAt = null;
     }
 
-    await updateTask(taskId, updateData);
+    const success = await updateTask(taskId, updateData);
+    if (success) {
+      addToast('success', 'Task updated', `Status changed to ${newStatus}.`);
+      refetchTasks();
+    } else {
+      addToast('error', 'Failed to update status', 'Please try again.');
+    }
   };
 
   const handleEditTask = async (taskId: string, data: Partial<Task>) => {
@@ -125,6 +131,7 @@ export default function TeammateProfilePage() {
     if (success) {
       addToast('success', 'Task updated', 'The task has been modified.');
       setEditTaskTarget(null);
+      refetchTasks();
     } else {
       addToast('error', 'Failed to update task', 'Please try again later.');
     }
@@ -142,8 +149,11 @@ export default function TeammateProfilePage() {
 
   const handleDeleteTask = async (taskId: string) => {
     try {
-      await deleteDocument(taskId);
-      addToast('success', 'Task deleted', 'The task has been successfully removed.');
+      const success = await deleteDocument(taskId);
+      if (success) {
+        addToast('success', 'Task deleted', 'The task has been successfully removed.');
+        refetchTasks();
+      }
     } catch (error) {
       addToast('error', 'Failed to delete task', 'Please try again later.');
     }
@@ -224,22 +234,125 @@ export default function TeammateProfilePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Left Column: Chart */}
-        <div className="lg:col-span-1">
+        <div>
           <PerformanceBarChart data={[performance]} />
         </div>
 
-        {/* Right Column: Active Tasks List */}
-        <div className="lg:col-span-2 flex flex-col">
-          <h2 className="text-lg font-bold text-slate-800 mb-4">Current Workload</h2>
+        {/* Right Column: Delay Analysis */}
+        <div className="flex flex-col">
+          {/* Delay Analysis Section */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm h-full flex flex-col">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Delay Analysis</h3>
+            {(() => {
+              const delayedTasks = memberTasks.map(t => ({ task: t, delay: calculateTaskDelay(t) })).filter(x => x.delay.isDelayed);
+              
+              if (delayedTasks.length === 0) {
+                return (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center text-emerald-700">
+                    <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-80" />
+                    <p className="font-medium">No delayed tasks!</p>
+                    <p className="text-sm opacity-80 mt-1">This teammate is completely caught up on their deadlines.</p>
+                  </div>
+                );
+              }
+
+              const totalDelayMs = delayedTasks.reduce((acc, curr) => acc + curr.delay.delayMs, 0);
+              const totalHours = Math.floor(totalDelayMs / (1000 * 60 * 60));
+              const totalDays = Math.floor(totalHours / 24);
+              const totalRemHours = totalHours % 24;
+              let totalStr = '';
+              if (totalDays > 0) totalStr += `${totalDays} day${totalDays > 1 ? 's' : ''}`;
+              if (totalRemHours > 0) {
+                if (totalStr) totalStr += ', ';
+                totalStr += `${totalRemHours} hour${totalRemHours > 1 ? 's' : ''}`;
+              }
+              if (!totalStr) totalStr = '< 1 hour';
+
+              const avgDelayMs = Math.round(totalDelayMs / delayedTasks.length);
+              const avgHours = Math.floor(avgDelayMs / (1000 * 60 * 60));
+              const avgDays = Math.floor(avgHours / 24);
+              const avgRemHours = avgHours % 24;
+              let avgStr = '';
+              if (avgDays > 0) avgStr += `${avgDays} day${avgDays > 1 ? 's' : ''}`;
+              if (avgRemHours > 0) {
+                if (avgStr) avgStr += ', ';
+                avgStr += `${avgRemHours} hour${avgRemHours > 1 ? 's' : ''}`;
+              }
+              if (!avgStr) avgStr = '< 1 hour';
+
+              const mostDelayedTask = delayedTasks.reduce((max, t) => t.delay.delayMs > max.delay.delayMs ? t : max, delayedTasks[0]);
+              const mostDelayedProjectName = projectMap[mostDelayedTask.task.projectId] || 'Unknown Project';
+
+              return (
+                <div className="flex-1 flex flex-col">
+                  <div className="bg-rose-50/30 rounded-xl border border-rose-200 overflow-hidden mb-4">
+                    <div className="p-4 bg-rose-50 border-b border-rose-200 flex justify-between items-center">
+                      <div className="flex items-center gap-2 text-rose-800 font-bold">
+                        <AlertTriangle className="w-5 h-5" />
+                        Total Accumulated Delay: {totalStr}
+                      </div>
+                      <div className="text-sm text-rose-600 font-medium bg-white px-2.5 py-1 rounded-full shadow-sm border border-rose-100">
+                        Across {delayedTasks.length} task{delayedTasks.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <div className="divide-y divide-rose-100">
+                      {delayedTasks.sort((a, b) => b.delay.delayMs - a.delay.delayMs).map(({ task, delay }) => (
+                        <div key={task.id} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase tracking-wider">
+                                {projectMap[task.projectId] || 'Unknown Project'}
+                              </span>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${task.status === 'Completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                {task.status}
+                              </span>
+                            </div>
+                            <h4 className="font-semibold text-slate-800">{task.title}</h4>
+                            <p className="text-xs text-slate-500 mt-1">
+                              Due: {new Date(task.dueDate).toLocaleDateString()} {new Date(task.dueDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end bg-rose-50 px-3 py-2 rounded-lg border border-rose-100">
+                            <span className="text-xs text-rose-500 font-bold uppercase tracking-wider mb-0.5">Delay Duration</span>
+                            <span className="font-bold text-rose-700 text-lg leading-none">+{delay.delayString}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Insights Section pushed to bottom to fill empty space */}
+                  <div className="mt-auto bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Quick Insights</h4>
+                    <ul className="text-sm text-slate-600 space-y-2">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                        <strong>Average delay per task:</strong> {avgStr}
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        <strong>Most delayed project:</strong> {mostDelayedProjectName}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col">
+        <h2 className="text-lg font-bold text-slate-800 mb-4">Current Workload</h2>
           {memberTasks.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-500">
               No tasks currently assigned to {member.name}.
             </div>
           ) : (
             <div className="flex-1 flex flex-col min-h-0 bg-slate-50/50 rounded-xl border border-slate-200 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
                 {currentTasks.map((task) => (
                   <TaskCard
                     key={task.id}
@@ -267,75 +380,6 @@ export default function TeammateProfilePage() {
               </div>
             </div>
           )}
-
-          {/* Delay Analysis Section */}
-          <div className="mt-8">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">Delay Analysis</h2>
-            {(() => {
-              const delayedTasks = memberTasks.map(t => ({ task: t, delay: calculateTaskDelay(t) })).filter(x => x.delay.isDelayed);
-              
-              if (delayedTasks.length === 0) {
-                return (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center text-emerald-700">
-                    <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-80" />
-                    <p className="font-medium">No delayed tasks!</p>
-                    <p className="text-sm opacity-80 mt-1">This teammate is completely caught up on their deadlines.</p>
-                  </div>
-                );
-              }
-
-              const totalDelayMs = delayedTasks.reduce((acc, curr) => acc + curr.delay.delayMs, 0);
-              const totalHours = Math.floor(totalDelayMs / (1000 * 60 * 60));
-              const totalDays = Math.floor(totalHours / 24);
-              const totalRemHours = totalHours % 24;
-              let totalStr = '';
-              if (totalDays > 0) totalStr += `${totalDays} day${totalDays > 1 ? 's' : ''}`;
-              if (totalRemHours > 0) {
-                if (totalStr) totalStr += ', ';
-                totalStr += `${totalRemHours} hour${totalRemHours > 1 ? 's' : ''}`;
-              }
-              if (!totalStr) totalStr = '< 1 hour';
-
-              return (
-                <div className="bg-rose-50/30 rounded-xl border border-rose-200 overflow-hidden">
-                  <div className="p-4 bg-rose-50 border-b border-rose-200 flex justify-between items-center">
-                    <div className="flex items-center gap-2 text-rose-800 font-bold">
-                      <AlertTriangle className="w-5 h-5" />
-                      Total Accumulated Delay: {totalStr}
-                    </div>
-                    <div className="text-sm text-rose-600 font-medium bg-white px-2.5 py-1 rounded-full shadow-sm border border-rose-100">
-                      Across {delayedTasks.length} task{delayedTasks.length !== 1 ? 's' : ''}
-                    </div>
-                  </div>
-                  <div className="divide-y divide-rose-100">
-                    {delayedTasks.sort((a, b) => b.delay.delayMs - a.delay.delayMs).map(({ task, delay }) => (
-                      <div key={task.id} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase tracking-wider">
-                              {projectMap[task.projectId] || 'Unknown Project'}
-                            </span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${task.status === 'Completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                              {task.status}
-                            </span>
-                          </div>
-                          <h4 className="font-semibold text-slate-800">{task.title}</h4>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Due: {new Date(task.dueDate).toLocaleDateString()} {new Date(task.dueDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </p>
-                        </div>
-                        <div className="flex flex-col items-start sm:items-end bg-rose-50 px-3 py-2 rounded-lg border border-rose-100">
-                          <span className="text-xs text-rose-500 font-bold uppercase tracking-wider mb-0.5">Delay Duration</span>
-                          <span className="font-bold text-rose-700 text-lg leading-none">+{delay.delayString}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
       </div>
 
       <EditMemberModal

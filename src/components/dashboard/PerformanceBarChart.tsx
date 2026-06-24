@@ -21,7 +21,7 @@ interface PerformanceBarChartProps {
 
 export default function PerformanceBarChart({ data }: PerformanceBarChartProps) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm h-full flex flex-col">
       <h3 className="mb-4 text-lg font-semibold text-slate-800">
         Team Performance (Completed vs Overdue)
       </h3>
@@ -34,7 +34,7 @@ export default function PerformanceBarChart({ data }: PerformanceBarChartProps) 
         />
       ) : (
         <div
-          className="h-80"
+          className="flex-1 min-h-[320px]"
           role="img"
           aria-label="Team performance bar chart comparing completed and overdue tasks"
         >
