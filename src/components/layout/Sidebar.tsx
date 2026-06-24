@@ -15,6 +15,7 @@ import {
   X,
   FolderKanban,
   Calendar,
+  Kanban,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -29,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Team Tracker', href: '/dashboard/team', icon: <Users className="h-5 w-5" /> },
   { label: 'Projects', href: '/dashboard/projects', icon: <FolderKanban className="h-5 w-5" /> },
   { label: 'Tasks', href: '/dashboard/tasks', icon: <CheckSquare className="h-5 w-5" /> },
+  { label: 'Board', href: '/dashboard/board', icon: <Kanban className="h-5 w-5" /> },
   { label: 'Deadlines', href: '/dashboard/deadlines', icon: <Calendar className="h-5 w-5" /> },
   { label: 'Monthly Reports', href: '/dashboard/reports', icon: <FileText className="h-5 w-5" /> },
 ];

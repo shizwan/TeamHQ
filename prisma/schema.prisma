@@ -45,6 +45,8 @@ model Task {
   status      String    @default("Pending") // 'Pending' | 'In Progress' | 'Completed' | 'Overdue'
   startDate   DateTime
   dueDate     DateTime
+  labels      String[]  @default([])
+  checklist   Json      @default("[]")
   completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

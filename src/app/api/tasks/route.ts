@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     const task = await prisma.task.create({ data: body });
     return NextResponse.json(task);
   } catch (error) {
+    console.error('Task creation error:', error);
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }

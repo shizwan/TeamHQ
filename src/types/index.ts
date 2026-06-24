@@ -40,6 +40,11 @@ export interface NewProjectForm {
 }
 
 // ─── Task ───────────────────────────────────────────────────────
+export interface ChecklistItem {
+  text: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -48,6 +53,8 @@ export interface Task {
   startDate: string;
   dueDate: string;
   status: TaskStatus;
+  labels?: string[];
+  checklist?: ChecklistItem[];
   createdAt: string;
   updatedAt: string;
   completedAt?: string | null;
@@ -60,7 +67,27 @@ export interface NewTaskForm {
   startDate: string;
   dueDate: string;
   status: TaskStatus;
+  labels?: string[];
+  checklist?: ChecklistItem[];
 }
+
+// ─── Labels ─────────────────────────────────────────────────────
+export interface LabelPreset {
+  name: string;
+  color: string;      // tailwind bg class
+  textColor: string;   // tailwind text class
+}
+
+export const LABEL_PRESETS: LabelPreset[] = [
+  { name: 'Bug', color: 'bg-rose-500', textColor: 'text-white' },
+  { name: 'Enhancement', color: 'bg-emerald-500', textColor: 'text-white' },
+  { name: 'Polish', color: 'bg-violet-500', textColor: 'text-white' },
+  { name: 'Documentation', color: 'bg-sky-500', textColor: 'text-white' },
+  { name: 'Mandatory', color: 'bg-amber-500', textColor: 'text-white' },
+  { name: 'Feature', color: 'bg-indigo-500', textColor: 'text-white' },
+  { name: 'Urgent', color: 'bg-red-600', textColor: 'text-white' },
+  { name: 'Design', color: 'bg-pink-500', textColor: 'text-white' },
+];
 
 // ─── Computed / Derived ─────────────────────────────────────────
 export interface PerformanceData {

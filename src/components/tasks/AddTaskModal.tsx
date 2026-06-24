@@ -2,21 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Check } from 'lucide-react';
-import type { TeamMember, Project, Task, ChecklistItem } from '@/types';
+import type { TeamMember, Project, ChecklistItem, TaskStatus, NewTaskForm } from '@/types';
 import { MAX_TITLE_LENGTH, LABEL_PRESETS } from '@/types';
 import { validateTaskForm, sanitizeString } from '@/lib/validation';
 
-interface EditTaskModalProps {
+interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  task: Task | null;
+  defaultStatus?: TaskStatus | null;
   projects: Project[];
   team: TeamMember[];
-  onSubmit: (taskId: string, data: Partial<Task>) => Promise<void>;
+  onSubmit: (data: NewTaskForm) => Promise<void>;
   loading: boolean;
 }
 
-export default function EditTaskModal({ isOpen, onClose, task, projects, team, onSubmit, loading }: EditTaskModalProps) {
+export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects, team, onSubmit, loading }: AddTaskModalProps) {
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -30,33 +30,27 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (task && isOpen) {
-      setProjectId(task.projectId || '');
-      setTitle(task.title);
-      setAssigneeId(task.assigneeId);
-      setLabels(task.labels || []);
-      setChecklist(task.checklist || []);
+    if (isOpen) {
+      setProjectId(projects.length > 0 ? projects[0].id : '');
+      setTitle('');
+      setAssigneeId(team.length > 0 ? team[0].id : '');
+      setLabels([]);
+      setChecklist([]);
       setNewChecklistItem('');
       
-      try {
-        const start = new Date(task.startDate);
-        setStartDate(start.toISOString().split('T')[0]);
-        setStartTime(start.toTimeString().slice(0, 5));
-        
-        const due = new Date(task.dueDate);
-        setDueDate(due.toISOString().split('T')[0]);
-        setDueTime(due.toTimeString().slice(0, 5));
-      } catch (e) {
-        // Date parsing error, shouldn't happen with valid ISO strings
-      }
+      const now = new Date();
+      setStartDate(now.toISOString().split('T')[0]);
+      setStartTime(now.toTimeString().slice(0, 5));
+      
+      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      setDueDate(nextWeek.toISOString().split('T')[0]);
+      setDueTime(nextWeek.toTimeString().slice(0, 5));
     }
-  }, [task, isOpen]);
+  }, [isOpen, projects, team]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
-
-    if (!task) return;
 
     if (!projectId) {
       setError('Please select a project.');
@@ -83,27 +77,27 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
       return;
     }
 
-    await onSubmit(task.id, {
+    await onSubmit({
       projectId,
       title: sanitizeString(title),
       assigneeId,
       startDate: combinedStart,
       dueDate: combinedDue,
+      status: defaultStatus || 'Pending',
       labels,
       checklist,
-      updatedAt: new Date().toISOString()
     });
 
     onClose();
   };
 
-  if (!isOpen || !task) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
         <div className="flex justify-between items-center p-6 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800">Edit Task</h3>
+          <h3 className="text-lg font-bold text-slate-800">Add Task</h3>
           <button
             type="button"
             onClick={onClose}
@@ -346,7 +340,7 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
               disabled={loading}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Saving…' : 'Save Changes'}
+              {loading ? 'Saving…' : 'Add Task'}
             </button>
           </div>
 
