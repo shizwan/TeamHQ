@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   description:
     'Track team performance, manage projects, monitor deadlines, and generate end-of-month reports. Built for managers who want clarity.',
   keywords: ['team management', 'performance tracking', 'project management', 'task tracker'],
+  icons: {
+    icon: '/logo.png',
+  },
 };
 
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -19,7 +22,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#0f172a" />
       </head>

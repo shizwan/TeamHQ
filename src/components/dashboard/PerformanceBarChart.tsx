@@ -81,7 +81,7 @@ export default function PerformanceBarChart({ data }: PerformanceBarChartProps) 
               <Bar
                 dataKey="overdue"
                 name="Overdue"
-                fill="#6b60ec"
+                fill="#f43f5e"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
               />
