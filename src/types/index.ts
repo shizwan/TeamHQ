@@ -1,5 +1,5 @@
 // ─── Task Status & Enums ──────────────────────────────────────────
-export type TaskStatus = 'In Progress' | 'Completed' | 'Carried Forward' | 'Cancelled' | 'Blocked' | 'Pending' | 'Overdue';
+export type TaskStatus = 'In Progress' | 'Completed' | 'Carried Forward' | 'Cancelled' | 'Blocked' | 'Pending' | 'Overdue' | 'Archived';
 
 export const TASK_STATUSES: TaskStatus[] = [
   'In Progress',

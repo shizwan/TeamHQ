@@ -8,7 +8,7 @@ import { useCollection, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore'
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { isOverdue, calculateTaskDelay } from '@/lib/validation';
-import { calculateTeamPerformance } from '@/lib/trackerEngine';
+import { calculateTeamPerformance, filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -45,8 +45,9 @@ export default function TeammateProfilePage() {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
 
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
-  const memberTasks = useMemo(() => tasks.filter((t) => t.assigneeId === id), [tasks, id]);
+  const memberTasks = useMemo(() => activeTasks.filter((t) => t.assigneeId === id), [activeTasks, id]);
 
   const { 
     currentItems: currentTasks, 

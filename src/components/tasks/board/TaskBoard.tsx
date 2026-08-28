@@ -90,6 +90,7 @@ export default function TaskBoard({
       Cancelled: [],
       Pending: [],
       Overdue: [],
+      Archived: [],
     };
 
     for (const task of filteredTasks) {

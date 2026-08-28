@@ -18,7 +18,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
-import { calculateTeamPerformance, calculateProjectPerformance, calculateGlobalTaskMetrics } from '@/lib/trackerEngine';
+import { calculateTeamPerformance, calculateProjectPerformance, calculateGlobalTaskMetrics, filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, Project, SlipCause, TaskStatus } from '@/types';
 import Header from '@/components/layout/Header';
 import MetricCard from '@/components/dashboard/MetricCard';
@@ -38,10 +38,13 @@ export default function DashboardPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [selectedSlipCause, setSelectedSlipCause] = useState<string>('All');
 
+  // Filter out tasks of archived projects
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
+
   // Engine Calculations
-  const teamMatrix = useMemo(() => calculateTeamPerformance(team, tasks), [team, tasks]);
-  const projectMatrix = useMemo(() => calculateProjectPerformance(projects, tasks), [projects, tasks]);
-  const globalMetrics = useMemo(() => calculateGlobalTaskMetrics(tasks), [tasks]);
+  const teamMatrix = useMemo(() => calculateTeamPerformance(team, activeTasks), [team, activeTasks]);
+  const projectMatrix = useMemo(() => calculateProjectPerformance(projects, activeTasks), [projects, activeTasks]);
+  const globalMetrics = useMemo(() => calculateGlobalTaskMetrics(activeTasks), [activeTasks]);
 
   // Executive Callout Lists
   const topPerformers = useMemo(() => {
@@ -67,7 +70,7 @@ export default function DashboardPage() {
 
   // Filtered Deliverables
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
+    return activeTasks.filter((t) => {
       const memberName = memberMap[t.assigneeId] || '';
       const projectTitle = projectMap[t.projectId] || '';
 
@@ -77,7 +80,7 @@ export default function DashboardPage() {
       if (selectedSlipCause !== 'All' && (t.slipCause || 'N/A') !== selectedSlipCause) return false;
       return true;
     });
-  }, [tasks, selectedMember, selectedProject, selectedStatus, selectedSlipCause, memberMap, projectMap]);
+  }, [activeTasks, selectedMember, selectedProject, selectedStatus, selectedSlipCause, memberMap, projectMap]);
 
   const resetFilters = () => {
     setSelectedMember('All');

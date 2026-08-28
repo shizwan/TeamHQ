@@ -25,6 +25,20 @@ export function calculateDaysActive(startDateStr?: string | Date | null, complet
   return Math.max(1, diffDays);
 }
 
+// Filter out tasks belonging to Archived projects or marked as Archived
+export function filterActiveTasks(tasks: Task[], projects: Project[] = []): Task[] {
+  if (!tasks) return [];
+  if (!projects || projects.length === 0) {
+    return tasks.filter((t) => t.status !== 'Archived');
+  }
+  const archivedProjectIds = new Set(
+    projects.filter((p) => p.status === 'Archived').map((p) => p.id)
+  );
+  return tasks.filter(
+    (t) => !archivedProjectIds.has(t.projectId) && t.status !== 'Archived'
+  );
+}
+
 // Helper to parse time string like "10:00 PM" into hours (24h)
 function parseTimeString(timeStr?: string | null): number {
   if (!timeStr) return 22; // default 10:00 PM

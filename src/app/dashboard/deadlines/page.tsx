@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
+import { filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import TaskCard from '@/components/tasks/TaskCard';
@@ -41,6 +42,8 @@ export default function DeadlinesPage() {
     const interval = setInterval(() => setNowTime(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const teamMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -118,7 +121,7 @@ export default function DeadlinesPage() {
     const todayTime = todayEnd.getTime();
     const weekTime = weekEnd.getTime();
 
-    const activeTasks = tasks.filter(t => t.status !== 'Completed').sort(
+    const activeTasksList = activeTasks.filter(t => t.status !== 'Completed').sort(
       (a, b) => {
         const dateA = a.targetDueDate || a.dueDate ? new Date(a.targetDueDate || a.dueDate!).getTime() : 0;
         const dateB = b.targetDueDate || b.dueDate ? new Date(b.targetDueDate || b.dueDate!).getTime() : 0;
@@ -126,7 +129,7 @@ export default function DeadlinesPage() {
       }
     );
 
-    activeTasks.forEach((task) => {
+    activeTasksList.forEach((task) => {
       const taskDueDate = task.targetDueDate || task.dueDate;
       const taskTime = taskDueDate ? new Date(taskDueDate).getTime() : 0;
       
@@ -142,7 +145,7 @@ export default function DeadlinesPage() {
     });
 
     return { overdue, dueToday, dueThisWeek, upcoming };
-  }, [tasks, nowTime, todayEnd, weekEnd]);
+  }, [activeTasks, nowTime, todayEnd, weekEnd]);
 
   const tasksForActiveTab = useMemo(() => {
     switch (activeTab) {

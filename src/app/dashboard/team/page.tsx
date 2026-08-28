@@ -4,11 +4,11 @@ import React, { useMemo, useCallback } from 'react';
 import { Users, Briefcase, Award, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useAddDoc, useDeleteDoc, useUpdateDoc } from '@/hooks/useFirestore';
-import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
+import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { sanitizeString } from '@/lib/validation';
-import { calculateTeamPerformance } from '@/lib/trackerEngine';
-import type { TeamMember, Task, PerformanceData, NewMemberForm } from '@/types';
+import { calculateTeamPerformance, filterActiveTasks } from '@/lib/trackerEngine';
+import type { TeamMember, Task, Project, PerformanceData, NewMemberForm } from '@/types';
 import Header from '@/components/layout/Header';
 import TeamTable from '@/components/team/TeamTable';
 import AddMemberForm from '@/components/team/AddMemberForm';
@@ -25,9 +25,12 @@ export default function TeamPage() {
 
   const teamPath = getTeamCollectionPath(userId);
   const tasksPath = getTasksCollectionPath(userId);
+  const projectsPath = getProjectsCollectionPath(userId);
 
   const { data: team, loading: teamLoading, refetch: refetchTeam } = useCollection<TeamMember>(teamPath);
   const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
+  
   const { addDocument, loading: addingMember } = useAddDoc(teamPath);
   const { deleteDocument, loading: deletingMember } = useDeleteDoc(teamPath);
   const { updateDocument, loading: updatingMember } = useUpdateDoc(teamPath);
@@ -35,9 +38,11 @@ export default function TeamPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string } | null>(null);
   const [editTarget, setEditTarget] = React.useState<PerformanceData | null>(null);
 
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
+
   const performanceData: PerformanceData[] = useMemo(() => {
-    return calculateTeamPerformance(team, tasks);
-  }, [team, tasks]);
+    return calculateTeamPerformance(team, activeTasks);
+  }, [team, activeTasks]);
 
   // Derived Metrics
   const totalTeamWorkload = useMemo(() => {
@@ -106,7 +111,7 @@ export default function TeamPage() {
     setDeleteTarget({ id, name });
   }, []);
 
-  if (teamLoading || tasksLoading) {
+  if (teamLoading || tasksLoading || projectsLoading) {
     return <LoadingSpinner message="Loading team performance dashboard..." />;
   }
 

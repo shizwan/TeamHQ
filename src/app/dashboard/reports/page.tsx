@@ -4,10 +4,10 @@ import React, { useMemo } from 'react';
 import { Printer } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
-import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
+import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { isOverdue } from '@/lib/validation';
-import { calculateTeamPerformance } from '@/lib/trackerEngine';
-import type { TeamMember, Task, PerformanceData } from '@/types';
+import { calculateTeamPerformance, filterActiveTasks } from '@/lib/trackerEngine';
+import type { TeamMember, Task, Project, PerformanceData } from '@/types';
 import Header from '@/components/layout/Header';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -26,18 +26,23 @@ export default function ReportsPage() {
   const { data: tasks, loading: tasksLoading } = useCollection<Task>(
     userId ? getTasksCollectionPath(userId) : null
   );
+  const { data: projects, loading: projectsLoading } = useCollection<Project>(
+    userId ? getProjectsCollectionPath(userId) : null
+  );
 
   const [selectedMonth, setSelectedMonth] = React.useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
+
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
+    return activeTasks.filter((t) => {
       const d = t.startDate || t.targetDueDate || t.dueDate;
       return d ? String(d).startsWith(selectedMonth) : true;
     });
-  }, [tasks, selectedMonth]);
+  }, [activeTasks, selectedMonth]);
 
   const performanceData: PerformanceData[] = useMemo(() => {
     return calculateTeamPerformance(team, filteredTasks);
@@ -60,7 +65,7 @@ export default function ReportsPage() {
     goToPage(1);
   }, [selectedMonth, goToPage]);
 
-  if (teamLoading || tasksLoading) {
+  if (teamLoading || tasksLoading || projectsLoading) {
     return <LoadingSpinner message="Loading reports..." />;
   }
 

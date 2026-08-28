@@ -6,6 +6,7 @@ import { useCollection, useAddDoc, useUpdateDoc, useDeleteDoc } from '@/hooks/us
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { sanitizeString } from '@/lib/validation';
+import { filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, Project, TaskStatus, NewTaskForm } from '@/types';
 import Header from '@/components/layout/Header';
 import TaskGrid from '@/components/tasks/TaskGrid';
@@ -34,8 +35,9 @@ export default function TasksPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
 
-  // Derive an active projects list since we can only assign tasks to active projects
+  // Derive active unarchived tasks & projects
   const activeProjects = useMemo(() => projects.filter(p => p.status === 'Active'), [projects]);
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const handleAddTask = useCallback(
     async (data: NewTaskForm) => {
@@ -146,7 +148,7 @@ export default function TasksPage() {
       </div>
 
       <TaskGrid
-        tasks={tasks}
+        tasks={activeTasks}
         projects={projects}
         team={team}
         onStatusChange={handleStatusChange}

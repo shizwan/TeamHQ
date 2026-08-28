@@ -6,6 +6,7 @@ import { useCollection, useAddDoc, useUpdateDoc, useDeleteDoc } from '@/hooks/us
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { sanitizeString } from '@/lib/validation';
+import { filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, Project, TaskStatus } from '@/types';
 import Header from '@/components/layout/Header';
 import TaskBoard from '@/components/tasks/board/TaskBoard';
@@ -34,6 +35,9 @@ export default function BoardPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [addTaskTargetStatus, setAddTaskTargetStatus] = React.useState<TaskStatus | null>(null);
+
+  // Filter out tasks of archived projects
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const handleStatusChange = useCallback(
     async (taskId: string, newStatus: TaskStatus) => {
@@ -151,7 +155,7 @@ export default function BoardPage() {
       />
 
       <TaskBoard
-        tasks={tasks}
+        tasks={activeTasks}
         projects={projects}
         team={team}
         onStatusChange={handleStatusChange}

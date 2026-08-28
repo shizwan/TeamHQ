@@ -25,6 +25,7 @@ const STATUS_ACCENT: Record<TaskStatus, string> = {
   'Carried Forward': 'border-l-amber-500',
   Cancelled: 'border-l-slate-300',
   Blocked: 'border-l-rose-600',
+  Archived: 'border-l-slate-400',
 };
 
 function getInitials(name: string): string {

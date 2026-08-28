@@ -18,6 +18,7 @@ export default function LoadingSpinner({
       }`}
       role="status"
       aria-label={message ?? 'Loading'}
+      suppressHydrationWarning
     >
       <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
       {message && (

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useCallback } from 'react';
-import { AlertTriangle, Trash2, Loader2 } from 'lucide-react';
+import { AlertTriangle, Trash2, Loader2, Archive, ArchiveRestore } from 'lucide-react';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -9,7 +9,7 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'danger' | 'warning';
+  variant?: 'danger' | 'warning' | 'archive' | 'unarchive';
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
@@ -29,6 +29,20 @@ const VARIANT_CONFIG = {
     iconColor: 'text-amber-600',
     confirmBg:
       'bg-amber-600 hover:bg-amber-700 focus-visible:outline-amber-600',
+  },
+  archive: {
+    icon: Archive,
+    iconBg: 'bg-indigo-100',
+    iconColor: 'text-indigo-600',
+    confirmBg:
+      'bg-indigo-600 hover:bg-indigo-700 focus-visible:outline-indigo-600',
+  },
+  unarchive: {
+    icon: ArchiveRestore,
+    iconBg: 'bg-indigo-100',
+    iconColor: 'text-indigo-600',
+    confirmBg:
+      'bg-indigo-600 hover:bg-indigo-700 focus-visible:outline-indigo-600',
   },
 } as const;
 

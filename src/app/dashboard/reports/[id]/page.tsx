@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { isOverdue } from '@/lib/validation';
-import { calculateTeamPerformance } from '@/lib/trackerEngine';
+import { calculateTeamPerformance, filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -38,14 +38,15 @@ export default function IndividualReportPage() {
   })();
   const [selectedMonth, setSelectedMonth] = React.useState(initialMonth);
 
+  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
   const memberTasks = useMemo(() => 
-    tasks.filter((t) => {
+    activeTasks.filter((t) => {
       if (t.assigneeId !== id) return false;
       const d = t.startDate || t.targetDueDate || t.dueDate;
       return d ? String(d).startsWith(selectedMonth) : true;
     }), 
-  [tasks, id, selectedMonth]);
+  [activeTasks, id, selectedMonth]);
 
   const performance: PerformanceData | null = useMemo(() => {
     if (!member) return null;

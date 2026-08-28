@@ -67,6 +67,12 @@ const COLUMN_STYLES: Record<TaskStatus, { bg: string; accent: string; dot: strin
     dot: 'bg-rose-600',
     headerBg: 'bg-rose-100',
   },
+  Archived: {
+    bg: 'bg-slate-100/50',
+    accent: 'text-slate-600',
+    dot: 'bg-slate-400',
+    headerBg: 'bg-slate-200',
+  },
 };
 
 export default function BoardColumn({

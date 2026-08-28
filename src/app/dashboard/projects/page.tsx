@@ -11,6 +11,7 @@ import Header from '@/components/layout/Header';
 import ProjectCard from '@/components/projects/ProjectCard';
 import AddProjectForm from '@/components/projects/AddProjectForm';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
 import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/ui/Pagination';
@@ -31,6 +32,9 @@ export default function ProjectsPage() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [projectToArchive, setProjectToArchive] = useState<Project | null>(null);
+  const [projectToUnarchive, setProjectToUnarchive] = useState<Project | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const filteredProjects = useMemo(() => {
     const query = search.toLowerCase();
@@ -79,11 +83,24 @@ export default function ProjectsPage() {
         addToast('error', 'Failed to create project', 'Please try again.');
       }
     },
-    [addProject, addToast, goToPage, refetchProjects]
+    [addProject, addToast, goToPage, refetchProjects, userId]
   );
 
   const handleStatusChange = useCallback(
     async (projectId: string, newStatus: Project['status']) => {
+      const target = projects.find((p) => p.id === projectId);
+      if (!target) return;
+
+      if (newStatus === 'Archived' && target.status !== 'Archived') {
+        setProjectToArchive(target);
+        return;
+      }
+
+      if (target.status === 'Archived' && newStatus !== 'Archived') {
+        setProjectToUnarchive(target);
+        return;
+      }
+
       const success = await updateDocument(projectId, { status: newStatus });
       if (success) {
         addToast('success', 'Project status updated', `Changed status to ${newStatus}.`);
@@ -92,8 +109,36 @@ export default function ProjectsPage() {
         addToast('error', 'Failed to update project', 'Please try again.');
       }
     },
-    [updateDocument, addToast, refetchProjects]
+    [projects, updateDocument, addToast, refetchProjects]
   );
+
+  const handleConfirmArchive = useCallback(async () => {
+    if (!projectToArchive) return;
+    setUpdatingStatus(true);
+    const success = await updateDocument(projectToArchive.id, { status: 'Archived' });
+    setUpdatingStatus(false);
+    if (success) {
+      addToast('success', 'Project archived', `"${projectToArchive.title}" has been moved to archive.`);
+      refetchProjects();
+      setProjectToArchive(null);
+    } else {
+      addToast('error', 'Failed to archive project', 'Please try again.');
+    }
+  }, [projectToArchive, updateDocument, addToast, refetchProjects]);
+
+  const handleConfirmUnarchive = useCallback(async () => {
+    if (!projectToUnarchive) return;
+    setUpdatingStatus(true);
+    const success = await updateDocument(projectToUnarchive.id, { status: 'Active' });
+    setUpdatingStatus(false);
+    if (success) {
+      addToast('success', 'Project unarchived', `"${projectToUnarchive.title}" has been restored to active.`);
+      refetchProjects();
+      setProjectToUnarchive(null);
+    } else {
+      addToast('error', 'Failed to unarchive project', 'Please try again.');
+    }
+  }, [projectToUnarchive, updateDocument, addToast, refetchProjects]);
 
   if (projectsLoading || tasksLoading) {
     return <LoadingSpinner message="Loading projects..." />;
@@ -171,6 +216,30 @@ export default function ProjectsPage() {
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!projectToArchive}
+        title="Archive this project?"
+        description={`Are you sure you want to archive "${projectToArchive?.title}"? Its active deliverables will be hidden from active scoreboards and performance reports until unarchived.`}
+        confirmLabel="Archive Project"
+        cancelLabel="Cancel"
+        variant="archive"
+        onConfirm={handleConfirmArchive}
+        onCancel={() => setProjectToArchive(null)}
+        loading={updatingStatus}
+      />
+
+      <ConfirmDialog
+        open={!!projectToUnarchive}
+        title="Unarchive this project?"
+        description={`Are you sure you want to restore "${projectToUnarchive?.title}" to Active? Its deliverables and metrics will be restored to active scoreboards and reports.`}
+        confirmLabel="Unarchive Project"
+        cancelLabel="Cancel"
+        variant="unarchive"
+        onConfirm={handleConfirmUnarchive}
+        onCancel={() => setProjectToUnarchive(null)}
+        loading={updatingStatus}
+      />
     </>
   );
 }
