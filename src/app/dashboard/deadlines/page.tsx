@@ -33,10 +33,11 @@ export default function DeadlinesPage() {
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
 
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
-  const [nowTime, setNowTime] = useState(() => Date.now());
+  const [nowTime, setNowTime] = useState<number>(() => new Date('2026-08-28T00:00:00.000Z').getTime());
   const [activeTab, setActiveTab] = React.useState<'overdue' | 'today' | 'week' | 'upcoming'>('overdue');
 
   useEffect(() => {
+    setNowTime(Date.now());
     const interval = setInterval(() => setNowTime(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
@@ -232,7 +233,7 @@ export default function DeadlinesPage() {
   ];
 
   return (
-    <>
+    <div suppressHydrationWarning>
       <Header
         title="Deadlines"
         description="Chronological view of active tasks prioritized by due date."
@@ -307,6 +308,6 @@ export default function DeadlinesPage() {
         onCancel={() => setDeleteTarget(null)}
         loading={deletingTask}
       />
-    </>
+    </div>
   );
 }
