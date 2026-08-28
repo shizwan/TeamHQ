@@ -36,7 +36,6 @@ yarn-error.log*
 next-env.d.ts
 
 # database
-prisma/dev.db
 prisma/dev.db-journal
 
 # scratch / test files
