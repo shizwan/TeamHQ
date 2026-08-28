@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -20,33 +20,54 @@ interface PerformanceBarChartProps {
 }
 
 export default function PerformanceBarChart({ data }: PerformanceBarChartProps) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm h-full flex flex-col">
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">
-        Team Performance (Completed vs Overdue)
-      </h3>
+  const [mounted, setMounted] = useState(false);
 
-      {data.length === 0 ? (
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Map data to ensure completed and overdue have non-undefined numerical values
+  const chartData = React.useMemo(() => {
+    return data.map((d) => ({
+      name: d.name,
+      Completed: d.completedTasks ?? d.completed ?? 0,
+      Active: d.activeTasks ?? 0,
+      Overdue: d.overdue ?? 0,
+      'Carried Fwd': d.carriedForward ?? 0,
+    }));
+  }, [data]);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-indigo-600" />
+          Team Performance Overview (Completed vs Active vs Overdue)
+        </h3>
+        <span className="text-xs font-semibold text-slate-400">Task Lifecycle Breakdown per Member</span>
+      </div>
+
+      {chartData.length === 0 ? (
         <EmptyState
-          icon={<BarChart3 className="h-12 w-12" />}
+          icon={<BarChart3 className="h-12 w-12 text-slate-400" />}
           title="No performance data"
           description="Add team members and assign tasks to see performance metrics here."
         />
+      ) : !mounted ? (
+        <div className="h-[350px] w-full flex items-center justify-center bg-slate-50/50 rounded-xl">
+          <span className="text-sm font-medium text-slate-400 animate-pulse">Rendering performance chart...</span>
+        </div>
       ) : (
-        <div
-          className="flex-1 min-h-[320px]"
-          role="img"
-          aria-label="Team performance bar chart comparing completed and overdue tasks"
-        >
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="w-full h-[350px]">
+          <ResponsiveContainer width="100%" height={350}>
             <BarChart
-              data={data}
-              margin={{ top: 5, right: 20, left: 0, bottom: 60 }}
+              data={chartData}
+              margin={{ top: 10, right: 20, left: -10, bottom: 65 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 12, fill: '#64748b' }}
+                tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }}
                 angle={-35}
                 textAnchor="end"
                 interval={0}
@@ -58,32 +79,48 @@ export default function PerformanceBarChart({ data }: PerformanceBarChartProps) 
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: 'none',
-                  borderRadius: '0.5rem',
-                  color: '#f1f5f9',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: '0.75rem',
+                  color: '#f8fafc',
                   fontSize: '0.875rem',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                 }}
-                itemStyle={{ color: '#f1f5f9' }}
-                cursor={{ fill: '#f1f5f9', opacity: 0.1 }}
+                itemStyle={{ color: '#f8fafc', padding: '2px 0' }}
+                cursor={{ fill: '#f1f5f9', opacity: 0.4 }}
               />
               <Legend
                 verticalAlign="top"
-                wrapperStyle={{ fontSize: '0.875rem', paddingBottom: '0.5rem' }}
+                align="right"
+                wrapperStyle={{ fontSize: '0.875rem', paddingBottom: '1rem' }}
               />
               <Bar
-                dataKey="completed"
+                dataKey="Completed"
                 name="Completed"
-                fill="#00c7e2"
+                fill="#10b981"
                 radius={[4, 4, 0, 0]}
-                maxBarSize={40}
+                maxBarSize={32}
               />
               <Bar
-                dataKey="overdue"
-                name="Overdue"
-                fill="#f43f5e"
+                dataKey="Active"
+                name="Active Workload"
+                fill="#3b82f6"
                 radius={[4, 4, 0, 0]}
-                maxBarSize={40}
+                maxBarSize={32}
+              />
+              <Bar
+                dataKey="Overdue"
+                name="Overdue"
+                fill="#ef4444"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={32}
+              />
+              <Bar
+                dataKey="Carried Fwd"
+                name="Carried Fwd"
+                fill="#f59e0b"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={32}
               />
             </BarChart>
           </ResponsiveContainer>
