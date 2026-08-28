@@ -34,3 +34,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database
+prisma/dev.db
+prisma/dev.db-journal
+
+# scratch / test files
+test_prisma.ts
+audit_metrics.ts
+
+# reference data (not app code)
+*.xlsx

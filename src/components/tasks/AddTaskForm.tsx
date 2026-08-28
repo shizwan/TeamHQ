@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import type { TeamMember, Project, NewTaskForm } from '@/types';
-import { MAX_TITLE_LENGTH } from '@/types';
-import { validateTaskForm, getTodayString, sanitizeString } from '@/lib/validation';
+import type { TeamMember, Project, NewTaskForm, TaskStatus, SlipCause } from '@/types';
+import { TASK_STATUSES, SLIP_CAUSES, TIME_SLOTS, MAX_TITLE_LENGTH } from '@/types';
+import { sanitizeString } from '@/lib/validation';
 
 interface AddTaskFormProps {
   projects: Project[];
@@ -19,9 +19,10 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
   const [title, setTitle] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [startDate, setStartDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [dueTime, setDueTime] = useState('');
+  const [targetDueDate, setTargetDueDate] = useState('');
+  const [targetDueTime, setTargetDueTime] = useState('10:00 PM');
+  const [status, setStatus] = useState<TaskStatus>('In Progress');
+  const [slipCause, setSlipCause] = useState<SlipCause>('N/A');
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -32,24 +33,12 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
       setError('Please select a project.');
       return;
     }
-
-    if (!startDate || !startTime || !dueDate || !dueTime) {
-      setError('Both start and due dates and times are required.');
+    if (!assigneeId) {
+      setError('Please select an assignee.');
       return;
     }
-
-    const combinedStart = new Date(`${startDate}T${startTime}`).toISOString();
-    const combinedDue = new Date(`${dueDate}T${dueTime}`).toISOString();
-
-    const validationError = validateTaskForm({ 
-      title, 
-      assigneeId, 
-      startDate: combinedStart,
-      dueDate: combinedDue 
-    });
-
-    if (validationError) {
-      setError(validationError);
+    if (!title.trim()) {
+      setError('Please enter a deliverable description.');
       return;
     }
 
@@ -57,18 +46,21 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
       projectId,
       title: sanitizeString(title),
       assigneeId,
-      startDate: combinedStart,
-      dueDate: combinedDue,
-      status: 'Pending',
+      startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+      targetDueDate: targetDueDate ? new Date(targetDueDate).toISOString() : undefined,
+      dueDate: targetDueDate ? new Date(targetDueDate).toISOString() : undefined,
+      targetDueTime,
+      status,
+      slipCause,
     });
 
     setTitle('');
     setAssigneeId('');
     setStartDate('');
-    setStartTime('');
-    setDueDate('');
-    setDueTime('');
-    // Intentionally keep projectId selected so they can add multiple tasks to the same project quickly
+    setTargetDueDate('');
+    setTargetDueTime('10:00 PM');
+    setStatus('In Progress');
+    setSlipCause('N/A');
     setError(null);
     setOpen(false);
   };
@@ -76,12 +68,6 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
   const handleClose = () => {
     setOpen(false);
     setError(null);
-    setTitle('');
-    setAssigneeId('');
-    setStartDate('');
-    setStartTime('');
-    setDueDate('');
-    setDueTime('');
   };
 
   return (
@@ -89,167 +75,179 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        aria-expanded={open}
-        aria-controls="add-task-modal"
+        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 cursor-pointer"
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
-        Assign New Task
+        Log New Deliverable
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
-            <div className="flex justify-between items-center p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800">Assign New Task</h3>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-lg font-bold text-slate-800">Log New Deliverable</h3>
               <button
                 type="button"
                 onClick={handleClose}
-                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
-                aria-label="Close dialog"
+                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form
-              id="add-task-modal"
-              onSubmit={handleSubmit}
-              className="p-6 grid grid-cols-1 md:grid-cols-6 gap-4 items-end"
-            >
-              {/* Project */}
-              <div className="flex flex-col gap-1.5 md:col-span-2">
-                <label htmlFor="task-project" className="text-sm font-medium text-slate-700">
-                  Project <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  id="task-project"
-                  required
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-                >
-                  <option value="">Select project</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Project */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Project <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  >
+                    <option value="">Select Project</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assignee */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Team Member / Assignee <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={assigneeId}
+                    onChange={(e) => setAssigneeId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  >
+                    <option value="">Select Team Member</option>
+                    {team.map((member) => (
+                      <option key={member.id} value={member.id}>{member.name} ({member.role})</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {/* Task Description */}
-              <div className="flex flex-col gap-1.5 md:col-span-2">
-                <label htmlFor="task-title" className="text-sm font-medium text-slate-700">
-                  Task Description <span className="text-rose-500">*</span>
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Deliverable Name & Scope <span className="text-rose-500">*</span>
                 </label>
                 <input
-                  id="task-title"
                   type="text"
                   required
                   maxLength={MAX_TITLE_LENGTH}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Redesign landing page"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                  placeholder="e.g. Enrolment Agent Decision Control Logic & Notes DB Wiring"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
                 />
               </div>
 
-              {/* Assignee */}
-              <div className="flex flex-col gap-1.5 md:col-span-2">
-                <label htmlFor="task-assignee" className="text-sm font-medium text-slate-700">
-                  Assignee <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  id="task-assignee"
-                  required
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-                >
-                  <option value="">Select member</option>
-                  {team.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Start Date & Time */}
-              <div className="flex flex-col gap-1.5 md:col-span-3">
-                <label className="text-sm font-medium text-slate-700">
-                  Start Date & Time <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex gap-2">
+              {/* Dates & Times */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Start Date
+                  </label>
                   <input
                     type="date"
-                    required
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-                    aria-label="Task start date"
-                  />
-                  <input
-                    type="time"
-                    required
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-                    aria-label="Task start time"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
                   />
                 </div>
-              </div>
 
-              {/* Due Date & Time */}
-              <div className="flex flex-col gap-1.5 md:col-span-3">
-                <label className="text-sm font-medium text-slate-700">
-                  Deadline & Time <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Target Due Date
+                  </label>
                   <input
                     type="date"
-                    required
-                    min={getTodayString()}
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-                    aria-label="Task due date"
+                    value={targetDueDate}
+                    onChange={(e) => setTargetDueDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
                   />
-                  <input
-                    type="time"
-                    required
-                    value={dueTime}
-                    onChange={(e) => setDueTime(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-                    aria-label="Task due time"
-                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Target Due Time (ETA)
+                  </label>
+                  <select
+                    value={targetDueTime}
+                    onChange={(e) => setTargetDueTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  >
+                    {TIME_SLOTS.map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Submit */}
-              <div className="pt-4 flex items-center justify-end gap-3 md:col-span-6 border-t border-slate-100 mt-2">
+              {/* Status & Slip Cause */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Lifecycle Status
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  >
+                    {TASK_STATUSES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Slip Cause (Accountability)
+                  </label>
+                  <select
+                    value={slipCause}
+                    onChange={(e) => setSlipCause(e.target.value as SlipCause)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  >
+                    {SLIP_CAUSES.map((cause) => (
+                      <option key={cause} value={cause}>{cause}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-sm text-rose-600 font-medium bg-rose-50 p-3 rounded-xl border border-rose-100" role="alert">
+                  {error}
+                </p>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? 'Assigning…' : 'Assign Task'}
+                  {loading ? 'Logging...' : 'Save Deliverable'}
                 </button>
               </div>
-
-              {error && (
-                <p className="col-span-full text-sm text-rose-600 font-medium bg-rose-50 p-3 rounded-lg border border-rose-100" role="alert">
-                  {error}
-                </p>
-              )}
             </form>
           </div>
         </div>

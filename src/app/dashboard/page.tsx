@@ -1,282 +1,438 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { FileText, CheckCircle2, Clock, AlertCircle, Database, TrendingUp, TrendingDown, ChevronRight } from 'lucide-react';
+import { 
+  CheckCircle2, 
+  Clock, 
+  AlertCircle, 
+  TrendingUp, 
+  TrendingDown, 
+  ChevronRight, 
+  Filter, 
+  Users, 
+  FolderKanban, 
+  RotateCcw,
+  Zap
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
-import { isOverdue, calculatePerformanceData } from '@/lib/validation';
-import { useToast } from '@/contexts/ToastContext';
-import type { TeamMember, Task, Project, TaskMetrics, PerformanceData } from '@/types';
+import { calculateTeamPerformance, calculateProjectPerformance, calculateGlobalTaskMetrics } from '@/lib/trackerEngine';
+import type { TeamMember, Task, Project, SlipCause, TaskStatus } from '@/types';
 import Header from '@/components/layout/Header';
 import MetricCard from '@/components/dashboard/MetricCard';
-import TaskPieChart from '@/components/dashboard/TaskPieChart';
-import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
-import EmptyState from '@/components/ui/EmptyState';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { addToast } = useToast();
-  const userId = user?.uid || '';
+  const userId = user?.uid || 'admin-user';
 
-  const { data: team, loading: teamLoading } = useCollection<TeamMember>(
-    userId ? getTeamCollectionPath(userId) : null
-  );
-  const { data: projects, loading: projectsLoading } = useCollection<Project>(
-    userId ? getProjectsCollectionPath(userId) : null
-  );
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(
-    userId ? getTasksCollectionPath(userId) : null
-  );
+  const { data: team, loading: teamLoading } = useCollection<TeamMember>(getTeamCollectionPath(userId));
+  const { data: projects, loading: projectsLoading } = useCollection<Project>(getProjectsCollectionPath(userId));
+  const { data: tasks, loading: tasksLoading } = useCollection<Task>(getTasksCollectionPath(userId));
 
-  const metrics: TaskMetrics = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter((t) => t.status === 'Completed').length;
-    const overdueCount = tasks.filter(
-      (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
-    ).length;
-    const inProgress = tasks.filter((t) => t.status === 'In Progress').length;
-    const pending = total - completed - overdueCount - inProgress;
-    return { total, completed, overdue: overdueCount, inProgress, pending: Math.max(0, pending) };
-  }, [tasks]);
+  // Filters for Live Deliverables Feed
+  const [selectedMember, setSelectedMember] = useState<string>('All');
+  const [selectedProject, setSelectedProject] = useState<string>('All');
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedSlipCause, setSelectedSlipCause] = useState<string>('All');
 
-  const performanceData: PerformanceData[] = useMemo(() => {
-    return calculatePerformanceData(team, tasks);
-  }, [team, tasks]);
+  // Engine Calculations
+  const teamMatrix = useMemo(() => calculateTeamPerformance(team, tasks), [team, tasks]);
+  const projectMatrix = useMemo(() => calculateProjectPerformance(projects, tasks), [projects, tasks]);
+  const globalMetrics = useMemo(() => calculateGlobalTaskMetrics(tasks), [tasks]);
 
-  const [nowTime, setNowTime] = React.useState(() => Date.now());
+  // Executive Callout Lists
+  const topPerformers = useMemo(() => {
+    return teamMatrix.filter((m) => m.performanceRating === '🟢 Top Performer' || m.onTimeRate >= 0.8).slice(0, 3);
+  }, [teamMatrix]);
 
-  React.useEffect(() => {
-    const interval = setInterval(() => setNowTime(Date.now()), 60000);
-    return () => clearInterval(interval);
-  }, []);
+  const actionRequiredMembers = useMemo(() => {
+    return teamMatrix.filter((m) => m.performanceRating === '🔴 Action Required' || m.slipsLogged > 0 || m.carriedForward > 0);
+  }, [teamMatrix]);
 
-  // Quick Glance: Needs Attention
-  const needsAttentionTasks = useMemo(() => {
-    const todayEnd = new Date(nowTime);
-    todayEnd.setHours(23, 59, 59, 999);
-    const todayTime = todayEnd.getTime();
+  // Maps
+  const memberMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const m of team) map[m.id] = m.name;
+    return map;
+  }, [team]);
 
-    return tasks
-      .filter(t => t.status !== 'Completed')
-      .filter(t => {
-        const dueTime = new Date(t.dueDate).getTime();
-        return t.status === 'Overdue' || dueTime < nowTime || dueTime <= todayTime;
-      })
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 4); // top 4
-  }, [tasks, nowTime]);
+  const projectMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of projects) map[p.id] = p.title;
+    return map;
+  }, [projects]);
 
-  // Quick Glance: Team Alerts
-  const teamAlerts = useMemo(() => {
-    const topPerformers = performanceData.filter(p => p.efficiencyScore >= 90).sort((a, b) => b.efficiencyScore - a.efficiencyScore).slice(0, 3);
-    const needsSupport = performanceData.filter(p => p.efficiencyScore < 60 && p.total > 0).sort((a, b) => a.efficiencyScore - b.efficiencyScore).slice(0, 3);
-    return { topPerformers, needsSupport };
-  }, [performanceData]);
+  // Filtered Deliverables
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const memberName = memberMap[t.assigneeId] || '';
+      const projectTitle = projectMap[t.projectId] || '';
 
-  // Quick Glance: Active Projects
-  const activeProjects = useMemo(() => {
-    return projects
-      .filter(p => p.status === 'Active')
-      .slice(0, 3)
-      .map(p => {
-        const pTasks = tasks.filter(t => t.projectId === p.id);
-        const completed = pTasks.filter(t => t.status === 'Completed').length;
-        const progress = pTasks.length === 0 ? 0 : Math.round((completed / pTasks.length) * 100);
-        return { ...p, progress, totalTasks: pTasks.length };
-      });
-  }, [projects, tasks]);
+      if (selectedMember !== 'All' && memberName !== selectedMember) return false;
+      if (selectedProject !== 'All' && projectTitle !== selectedProject) return false;
+      if (selectedStatus !== 'All' && t.status !== selectedStatus) return false;
+      if (selectedSlipCause !== 'All' && (t.slipCause || 'N/A') !== selectedSlipCause) return false;
+      return true;
+    });
+  }, [tasks, selectedMember, selectedProject, selectedStatus, selectedSlipCause, memberMap, projectMap]);
 
+  const resetFilters = () => {
+    setSelectedMember('All');
+    setSelectedProject('All');
+    setSelectedStatus('All');
+    setSelectedSlipCause('All');
+  };
 
   if (teamLoading || projectsLoading || tasksLoading) {
-    return <LoadingSpinner message="Loading dashboard..." />;
+    return <LoadingSpinner message="Loading Executive Scoreboard & Performance Matrix..." />;
   }
 
   return (
     <>
-      <Header title="Dashboard" description="Overview of your team operations and progress." />
+      <Header
+        title="Dev Team Scoreboard & Executive Dashboard"
+        description="Real-Time Executive Monitoring Engine • Team Performance Matrix • Slip Accountability Tracking"
+      />
 
-      {team.length === 0 && tasks.length === 0 && (
-        <div className="mb-6">
-          <EmptyState
-            icon={<Database className="w-12 h-12" />}
-            title="Welcome to TeamHQ!"
-            description="Your workspace is empty. Start by adding team members manually to begin."
-          />
-        </div>
-      )}
-
+      {/* EXECUTIVE TOP LEVEL METRICS */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <MetricCard
-          label="Total Projects"
-          value={projects.length}
-          icon={<FileText className="w-6 h-6 text-slate-600" />}
-          colorClass="text-slate-800 bg-slate-100"
-        />
-        <MetricCard
-          label="Pending"
-          value={metrics.pending}
-          icon={<Clock className="w-6 h-6 text-indigo-500" />}
+          label="Total Deliverables"
+          value={globalMetrics.total}
+          icon={<Zap className="w-6 h-6 text-indigo-600" />}
           colorClass="text-indigo-600 bg-indigo-50"
         />
         <MetricCard
-          label="Completed"
-          value={metrics.completed}
-          icon={<CheckCircle2 className="w-6 h-6 text-emerald-500" />}
-          colorClass="text-emerald-600 bg-emerald-50"
-        />
-        <MetricCard
           label="In Progress"
-          value={metrics.inProgress}
+          value={globalMetrics.inProgress}
           icon={<Clock className="w-6 h-6 text-blue-500" />}
           colorClass="text-blue-600 bg-blue-50"
         />
         <MetricCard
-          label="Overdue"
-          value={metrics.overdue}
+          label="Completed"
+          value={globalMetrics.completed}
+          icon={<CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+          colorClass="text-emerald-600 bg-emerald-50"
+        />
+        <MetricCard
+          label="Carried Forward"
+          value={globalMetrics.carriedForward}
+          icon={<AlertCircle className="w-6 h-6 text-amber-500" />}
+          colorClass="text-amber-600 bg-amber-50"
+        />
+        <MetricCard
+          label="Overdue / Delayed"
+          value={globalMetrics.overdue}
           icon={<AlertCircle className="w-6 h-6 text-rose-500" />}
           colorClass="text-rose-600 bg-rose-50"
         />
       </div>
 
-      {/* QUICK GLANCES */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Needs Attention */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col min-h-[320px]">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-rose-500" />
-              Needs Attention
-            </h3>
-            <Link href="/dashboard/deadlines" className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center">
-              View All <ChevronRight className="w-4 h-4" />
-            </Link>
+      {/* EXECUTIVE CALLOUT BANNER */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Top Performers Card */}
+        <div className="bg-emerald-900/10 border border-emerald-300/40 rounded-2xl p-5 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4" /> Top Performers
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-200 text-emerald-800">
+              {topPerformers.length} Active
+            </span>
           </div>
-          <div className="flex-1 overflow-y-auto pr-2">
-            {needsAttentionTasks.length === 0 ? (
-              <div className="text-center text-sm text-slate-500 py-8 flex flex-col items-center justify-center h-full">
-                All caught up! No urgent tasks.
+          <div className="space-y-2.5">
+            {topPerformers.map((m) => (
+              <div key={m.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{m.name}</p>
+                  <p className="text-xs text-slate-500">{m.role}</p>
+                </div>
+                <span className="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg">
+                  {Math.round(m.onTimeRate * 100)}% On-Time
+                </span>
               </div>
-            ) : (
-              <ul className="space-y-3">
-                {needsAttentionTasks.map(t => {
-                  const assignee = team.find(m => m.id === t.assigneeId);
-                  return (
-                    <li key={t.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center group">
-                      <div className="truncate pr-4 w-full">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{t.title}</p>
-                        <p className="text-xs text-slate-500 truncate mt-0.5">
-                          {assignee ? assignee.name : 'Unassigned'} • Due {new Date(t.dueDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* Team Alerts */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col min-h-[320px]">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              Team Alerts
-            </h3>
-            <Link href="/dashboard/team" className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center">
-              Directory <ChevronRight className="w-4 h-4" />
-            </Link>
+        {/* Action Required Callout */}
+        <div className="bg-rose-900/10 border border-rose-300/40 rounded-2xl p-5 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+              <TrendingDown className="w-4 h-4" /> Action Required ({actionRequiredMembers.length})
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-200 text-rose-800">
+              Slips / Delayed
+            </span>
           </div>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-            {teamAlerts.needsSupport.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <TrendingDown className="w-3 h-3" /> Needs Support
-                </h4>
-                <ul className="space-y-2">
-                  {teamAlerts.needsSupport.map(m => (
-                    <li key={m.id} className="flex justify-between items-center text-sm">
-                      <span className="font-medium text-slate-700 truncate pr-2">{m.name}</span>
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-700 whitespace-nowrap">
-                        {m.efficiencyScore}% Eff
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+          <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+            {actionRequiredMembers.map((m) => (
+              <div key={m.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-rose-100 shadow-sm">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{m.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {m.slipsLogged} Slips • {m.carriedForward} Carried Fwd
+                  </p>
+                </div>
+                <span className="text-xs font-bold px-2 py-1 bg-rose-100 text-rose-800 rounded-lg">
+                  🔴 Action Required
+                </span>
               </div>
-            )}
-            
-            {teamAlerts.topPerformers.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-2 mt-4 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" /> Top Performers
-                </h4>
-                <ul className="space-y-2">
-                  {teamAlerts.topPerformers.map(m => (
-                    <li key={m.id} className="flex justify-between items-center text-sm">
-                      <span className="font-medium text-slate-700 truncate pr-2">{m.name}</span>
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                        {m.efficiencyScore}% Eff
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {teamAlerts.needsSupport.length === 0 && teamAlerts.topPerformers.length === 0 && (
-              <div className="text-center text-sm text-slate-500 py-8 flex flex-col items-center justify-center h-full">
-                Not enough data for alerts.
-              </div>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* Active Projects Snapshot */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col min-h-[320px]">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-500" />
-              Active Projects
-            </h3>
-            <Link href="/dashboard/projects" className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center">
-              All Projects <ChevronRight className="w-4 h-4" />
+        {/* Portfolio Health Summary */}
+        <div className="bg-indigo-900/10 border border-indigo-300/40 rounded-2xl p-5 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 flex items-center gap-1.5">
+              <FolderKanban className="w-4 h-4" /> Project Portfolio Status
+            </span>
+            <Link href="/dashboard/projects" className="text-xs font-semibold text-indigo-600 hover:underline flex items-center">
+              View All <ChevronRight className="w-3 h-3" />
             </Link>
           </div>
-          <div className="flex-1 overflow-y-auto pr-2">
-            {activeProjects.length === 0 ? (
-              <div className="text-center text-sm text-slate-500 py-8 flex flex-col items-center justify-center h-full">
-                No active projects found.
+          <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+            {projectMatrix.slice(0, 4).map((p) => (
+              <div key={p.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                <div className="truncate pr-2">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{p.title}</p>
+                  <p className="text-xs text-slate-500">{p.activeTasks} Active Tasks • {p.priority} Priority</p>
+                </div>
+                <span className="text-xs font-semibold px-2 py-1 bg-slate-100 text-slate-700 rounded-lg whitespace-nowrap">
+                  {p.health}
+                </span>
               </div>
-            ) : (
-              <ul className="space-y-5 mt-2">
-                {activeProjects.map(p => (
-                  <li key={p.id} className="group">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-semibold text-slate-800 truncate pr-2">{p.title}</span>
-                      <span className="text-xs font-bold text-slate-500">{p.progress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${p.progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                        style={{ width: `${Math.max(2, p.progress)}%` }}
-                      ></div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            ))}
           </div>
         </div>
       </div>
 
-      {/* CHARTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <TaskPieChart metrics={metrics} />
-        <PerformanceBarChart data={performanceData} />
+      {/* TEAM PERFORMANCE MATRIX TABLE */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-8 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-600" />
+            Team Performance Matrix & Accountability Roster
+          </h2>
+          <span className="text-xs text-slate-500">Auto-updated based on deliverable slip causes & ETA delays</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th className="py-3.5 px-4">Team Member</th>
+                <th className="py-3.5 px-4">Role</th>
+                <th className="py-3.5 px-4">Manager</th>
+                <th className="py-3.5 px-4 text-center">Active Tasks</th>
+                <th className="py-3.5 px-4 text-center">Completed</th>
+                <th className="py-3.5 px-4 text-center">On-Time Rate %</th>
+                <th className="py-3.5 px-4 text-center">Carried Fwd</th>
+                <th className="py-3.5 px-4 text-center">Slips Logged</th>
+                <th className="py-3.5 px-4 text-center">Performance Rating</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium">
+              {teamMatrix.map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 px-4 font-bold text-slate-900">{row.name}</td>
+                  <td className="py-3 px-4 text-slate-600">{row.role}</td>
+                  <td className="py-3 px-4 text-slate-500">{row.manager}</td>
+                  <td className="py-3 px-4 text-center font-semibold text-slate-800">{row.activeTasks}</td>
+                  <td className="py-3 px-4 text-center font-semibold text-emerald-600">{row.completedTasks}</td>
+                  <td className="py-3 px-4 text-center">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${row.onTimeRate >= 0.8 ? 'bg-emerald-100 text-emerald-800' : (row.onTimeRate >= 0.5 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800')}`}>
+                      {Math.round(row.onTimeRate * 100)}%
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-center font-semibold text-amber-600">{row.carriedForward}</td>
+                  <td className="py-3 px-4 text-center font-semibold text-rose-600">{row.slipsLogged}</td>
+                  <td className="py-3 px-4 text-center">
+                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${row.performanceRating === '🟢 Top Performer' ? 'bg-emerald-100 text-emerald-800' : (row.performanceRating === '🔴 Action Required' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-slate-100 text-slate-700')}`}>
+                      {row.performanceRating}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* DYNAMIC MULTI-FILTER BAR */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg font-bold text-slate-800">Live Deliverables Audit & Filter Engine</h2>
+          </div>
+          {(selectedMember !== 'All' || selectedProject !== 'All' || selectedStatus !== 'All' || selectedSlipCause !== 'All') && (
+            <button
+              onClick={resetFilters}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors self-start md:self-auto cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset All Filters
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Member Filter */}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Team Member</label>
+            <select
+              value={selectedMember}
+              onChange={(e) => setSelectedMember(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 py-2 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+            >
+              <option value="All">All Members ({team.length})</option>
+              {team.map((m) => (
+                <option key={m.id} value={m.name}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Project Filter */}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Project</label>
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 py-2 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+            >
+              <option value="All">All Projects ({projects.length})</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.title}>{p.title}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Status</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 py-2 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+            >
+              <option value="All">All Statuses</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="Carried Forward">Carried Forward</option>
+              <option value="Blocked">Blocked</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+
+          {/* Slip Cause Filter */}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Slip Cause</label>
+            <select
+              value={selectedSlipCause}
+              onChange={(e) => setSelectedSlipCause(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 py-2 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+            >
+              <option value="All">All Slip Causes</option>
+              <option value="N/A">N/A</option>
+              <option value="Developer">Developer</option>
+              <option value="Dependency">Dependency</option>
+              <option value="Scope Drift">Scope Drift</option>
+              <option value="Environment/QA">Environment/QA</option>
+              <option value="Unplanned Task">Unplanned Task</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* REAL-TIME LIVE DELIVERABLES FEED TABLE */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-800">Live Deliverables Stream ({filteredTasks.length} matching)</h2>
+          <span className="text-xs text-slate-500 font-medium">Auto-computed Days Active & Delay Hrs</span>
+        </div>
+
+        {filteredTasks.length === 0 ? (
+          <div className="p-12 text-center text-slate-500">
+            No deliverables match the selected filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-3">DLV ID</th>
+                  <th className="py-3 px-3">Team Member</th>
+                  <th className="py-3 px-3">Project</th>
+                  <th className="py-3 px-4">Deliverable Name</th>
+                  <th className="py-3 px-3">Start Date</th>
+                  <th className="py-3 px-3">Target ETA</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Slip Cause</th>
+                  <th className="py-3 px-3 text-center">Days Active</th>
+                  <th className="py-3 px-3 text-center">Delay (Hrs)</th>
+                  <th className="py-3 px-3 text-center">Lifecycle Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-xs">
+                {filteredTasks.map((t) => {
+                  const memberName = memberMap[t.assigneeId] || 'Unassigned';
+                  const projectTitle = projectMap[t.projectId] || 'General';
+                  return (
+                    <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 font-mono font-bold text-slate-800 whitespace-nowrap">
+                        {t.deliverableId || 'DLV-000000'}
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-slate-900 whitespace-nowrap">{memberName}</td>
+                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">{projectTitle}</td>
+                      <td className="py-3 px-4 text-slate-900 font-semibold max-w-xs truncate">{t.title}</td>
+                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                        {t.startDate ? new Date(t.startDate).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                        {t.targetDueDate ? `${new Date(t.targetDueDate).toLocaleDateString()} ${t.targetDueTime || ''}` : '-'}
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                          t.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                          t.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                          t.status === 'Carried Forward' ? 'bg-amber-100 text-amber-800' :
+                          t.status === 'Blocked' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                          (t.slipCause && t.slipCause !== 'N/A') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'text-slate-400'
+                        }`}>
+                          {t.slipCause || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">
+                        {t.daysActive || 1}
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap font-semibold">
+                        {(t.delayHours ?? 0) > 0 ? (
+                          <span className="text-rose-600 font-bold">+{t.delayHours} hrs</span>
+                        ) : (
+                          <span className="text-slate-400">0</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800">
+                          {t.lifecycleStatus || '🟢 In Progress'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );

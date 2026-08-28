@@ -49,6 +49,24 @@ const COLUMN_STYLES: Record<TaskStatus, { bg: string; accent: string; dot: strin
     dot: 'bg-rose-500',
     headerBg: 'bg-rose-50',
   },
+  'Carried Forward': {
+    bg: 'bg-amber-50/40',
+    accent: 'text-amber-700',
+    dot: 'bg-amber-500',
+    headerBg: 'bg-amber-50',
+  },
+  Cancelled: {
+    bg: 'bg-slate-50/40',
+    accent: 'text-slate-500',
+    dot: 'bg-slate-400',
+    headerBg: 'bg-slate-100',
+  },
+  Blocked: {
+    bg: 'bg-rose-50/60',
+    accent: 'text-rose-800',
+    dot: 'bg-rose-600',
+    headerBg: 'bg-rose-100',
+  },
 };
 
 export default function BoardColumn({
@@ -80,7 +98,11 @@ export default function BoardColumn({
     if (localSort === 'name') {
       sorted.sort((a, b) => a.title.localeCompare(b.title));
     } else if (localSort === 'dueDate') {
-      sorted.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      sorted.sort((a, b) => {
+        const dA = a.targetDueDate || a.dueDate ? new Date(a.targetDueDate || a.dueDate!).getTime() : 0;
+        const dB = b.targetDueDate || b.dueDate ? new Date(b.targetDueDate || b.dueDate!).getTime() : 0;
+        return dA - dB;
+      });
     }
     return sorted;
   }, [tasks, localSort]);

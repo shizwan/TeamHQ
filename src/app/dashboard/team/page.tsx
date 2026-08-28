@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useAddDoc, useDeleteDoc, useUpdateDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
-import { sanitizeString, isOverdue, calculatePerformanceData } from '@/lib/validation';
+import { sanitizeString } from '@/lib/validation';
+import { calculateTeamPerformance } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData, NewMemberForm } from '@/types';
 import Header from '@/components/layout/Header';
 import TeamTable from '@/components/team/TeamTable';
@@ -20,13 +21,13 @@ import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
 export default function TeamPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const userId = user?.uid || '';
+  const userId = user?.uid || 'admin-user';
 
-  const teamPath = userId ? getTeamCollectionPath(userId) : null;
-  const tasksPath = userId ? getTasksCollectionPath(userId) : null;
+  const teamPath = getTeamCollectionPath(userId);
+  const tasksPath = getTasksCollectionPath(userId);
 
   const { data: team, loading: teamLoading, refetch: refetchTeam } = useCollection<TeamMember>(teamPath);
-  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
+  const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
   const { addDocument, loading: addingMember } = useAddDoc(teamPath);
   const { deleteDocument, loading: deletingMember } = useDeleteDoc(teamPath);
   const { updateDocument, loading: updatingMember } = useUpdateDoc(teamPath);
@@ -35,55 +36,22 @@ export default function TeamPage() {
   const [editTarget, setEditTarget] = React.useState<PerformanceData | null>(null);
 
   const performanceData: PerformanceData[] = useMemo(() => {
-    return calculatePerformanceData(team, tasks);
+    return calculateTeamPerformance(team, tasks);
   }, [team, tasks]);
 
   // Derived Metrics
   const totalTeamWorkload = useMemo(() => {
-    return performanceData.reduce((acc, curr) => acc + curr.inProgress + curr.pending, 0);
+    return performanceData.reduce((acc, curr) => acc + curr.activeTasks, 0);
   }, [performanceData]);
 
   const topPerformer = useMemo(() => {
-    const active = performanceData.filter((m) => m.completed > 0);
+    const active = performanceData.filter((m) => m.performanceRating === '🟢 Top Performer');
     if (active.length === 0) return 'None';
-    const sorted = [...active].sort((a, b) => b.efficiencyScore - a.efficiencyScore);
-    return sorted[0].name.split(' ')[0];
+    return active[0].name;
   }, [performanceData]);
 
-  const lowestPerformer = useMemo(() => {
-    const active = performanceData.filter((m) => m.total > 0 && m.efficiencyScore < 100);
-    if (active.length === 0) return 'None';
-    const sorted = [...active].sort((a, b) => a.efficiencyScore - b.efficiencyScore);
-    return sorted[0].name.split(' ')[0];
-  }, [performanceData]);
-
-  const mostOverburdened = useMemo(() => {
-    if (performanceData.length === 0) return 'N/A';
-    const activeMembers = performanceData.filter((m) => m.inProgress + m.pending > 0);
-    if (activeMembers.length === 0) return 'N/A';
-    const sorted = [...activeMembers].sort(
-      (a, b) => b.inProgress + b.pending - (a.inProgress + a.pending)
-    );
-    return sorted[0].name.split(' ')[0];
-  }, [performanceData]);
-
-  const mostOverdue = useMemo(() => {
-    if (performanceData.length === 0) return 'N/A';
-    const activeMembers = performanceData.filter((m) => m.overdue > 0);
-    if (activeMembers.length === 0) return 'None';
-    const sorted = [...activeMembers].sort((a, b) => b.overdue - a.overdue);
-    return sorted[0].name.split(' ')[0];
-  }, [performanceData]);
-
-  const topContributor = useMemo(() => {
-    const activeMembers = performanceData.filter((m) => m.completed > 0);
-    if (activeMembers.length === 0) return 'None';
-    const sorted = [...activeMembers].sort((a, b) => b.completed - a.completed);
-    return sorted[0].name.split(' ')[0];
-  }, [performanceData]);
-
-  const availableCapacity = useMemo(() => {
-    return performanceData.filter((m) => m.inProgress + m.pending === 0).length;
+  const actionRequiredCount = useMemo(() => {
+    return performanceData.filter((m) => m.performanceRating === '🔴 Action Required').length;
   }, [performanceData]);
 
   const handleAddMember = useCallback(
@@ -92,7 +60,9 @@ export default function TeamPage() {
         userId,
         name: sanitizeString(data.name),
         role: sanitizeString(data.role),
-        department: sanitizeString(data.department),
+        department: sanitizeString(data.department || ''),
+        status: 'Active',
+        manager: 'Shizwan',
         createdAt: new Date().toISOString(),
       });
 
@@ -103,7 +73,7 @@ export default function TeamPage() {
         addToast('error', 'Failed to add member', 'Please try again.');
       }
     },
-    [addDocument, addToast]
+    [addDocument, addToast, refetchTeam, userId]
   );
 
   const handleEditMember = useCallback(
@@ -130,14 +100,14 @@ export default function TeamPage() {
       addToast('error', 'Failed to remove member', 'Please try again.');
     }
     setDeleteTarget(null);
-  }, [deleteTarget, deleteDocument, addToast]);
+  }, [deleteTarget, deleteDocument, addToast, refetchTeam]);
 
   const handleRequestDelete = useCallback((id: string, name: string) => {
     setDeleteTarget({ id, name });
   }, []);
 
   if (teamLoading || tasksLoading) {
-    return <LoadingSpinner message="Loading team dashboard..." />;
+    return <LoadingSpinner message="Loading team performance dashboard..." />;
   }
 
   const orphanedTaskCount = deleteTarget
@@ -148,8 +118,8 @@ export default function TeamPage() {
     <>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <Header
-          title="Team Tracking Dashboard"
-          description="Manage your staff, track individual performance, and visualize workload."
+          title="Team Roster & Performance Matrix"
+          description="Manage dev team roster, track on-time delivery rates, and review slip causes."
         />
         <AddMemberForm onSubmit={handleAddMember} loading={addingMember} />
       </div>
@@ -157,51 +127,27 @@ export default function TeamPage() {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
-          label="Total Members"
+          label="Total Team Members"
           value={team.length}
-          icon={<Users className="h-6 w-6" />}
+          icon={<Users className="h-6 w-6 text-indigo-600" />}
           colorClass="text-indigo-600 bg-indigo-50"
         />
         <MetricCard
           label="Active Workload"
-          value={totalTeamWorkload}
-          icon={<Briefcase className="h-6 w-6" />}
+          value={`${totalTeamWorkload} Tasks`}
+          icon={<Briefcase className="h-6 w-6 text-blue-600" />}
           colorClass="text-blue-600 bg-blue-50"
-        />
-        <MetricCard
-          label="Available Capacity"
-          value={`${availableCapacity} free`}
-          icon={<Users className="h-6 w-6" />}
-          colorClass="text-indigo-600 bg-indigo-50"
-        />
-        <MetricCard
-          label="Top Contributor"
-          value={topContributor}
-          icon={<Award className="h-6 w-6" />}
-          colorClass="text-emerald-600 bg-emerald-50"
         />
         <MetricCard
           label="Top Performer"
           value={topPerformer}
-          icon={<Award className="h-6 w-6" />}
+          icon={<Award className="h-6 w-6 text-emerald-600" />}
           colorClass="text-emerald-600 bg-emerald-50"
         />
         <MetricCard
-          label="Lowest Performer"
-          value={lowestPerformer}
-          icon={<AlertTriangle className="h-6 w-6" />}
-          colorClass="text-rose-600 bg-rose-50"
-        />
-        <MetricCard
-          label="Highest Workload"
-          value={mostOverburdened}
-          icon={<AlertTriangle className="h-6 w-6" />}
-          colorClass="text-amber-600 bg-amber-50"
-        />
-        <MetricCard
-          label="Most Overdue"
-          value={mostOverdue}
-          icon={<AlertTriangle className="h-6 w-6" />}
+          label="Action Required"
+          value={`${actionRequiredCount} Members`}
+          icon={<AlertTriangle className="h-6 w-6 text-rose-600" />}
           colorClass="text-rose-600 bg-rose-50"
         />
       </div>
@@ -213,7 +159,7 @@ export default function TeamPage() {
 
       {/* Team Table */}
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Team Members</h2>
+        <h2 className="text-lg font-bold text-slate-800 mb-4">Team Performance Matrix</h2>
         <TeamTable performanceData={performanceData} onDeleteMember={handleRequestDelete} onEditMember={setEditTarget} />
       </div>
 
@@ -222,7 +168,7 @@ export default function TeamPage() {
         title={`Remove ${deleteTarget?.name}?`}
         description={
           orphanedTaskCount > 0
-            ? `This member has ${orphanedTaskCount} task(s) that will become unassigned. This action cannot be undone.`
+            ? `This member has ${orphanedTaskCount} deliverable(s) assigned. This action cannot be undone.`
             : 'This action cannot be undone.'
         }
         confirmLabel="Remove Member"

@@ -16,7 +16,8 @@ interface TaskCardProps {
   onEdit?: (task: Task) => void;
 }
 
-function formatDate(dateString: string): string {
+function formatDate(dateString?: string | null): string {
+  if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -34,7 +35,7 @@ export default function TaskCard({
   onDelete,
   onEdit,
 }: TaskCardProps) {
-  const overdue = isOverdue(task.dueDate, task.status);
+  const overdue = (task.delayHours ?? 0) > 0 || isOverdue(task.targetDueDate || task.dueDate || '', task.status);
 
   return (
     <article className="group bg-white border border-slate-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-all">
@@ -105,7 +106,7 @@ export default function TaskCard({
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span className="w-8 font-semibold text-slate-600">Due:</span>
-          <span className="flex-1">{formatDate(task.dueDate)}</span>
+          <span className="flex-1">{formatDate(task.targetDueDate || task.dueDate)} {task.targetDueTime || ''}</span>
           {overdue && (
             <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-rose-700">
               Past due

@@ -29,7 +29,7 @@ export default function TeamTable({ performanceData, onDeleteMember, onEditMembe
   const filtered = performanceData.filter((member) =>
     member.name.toLowerCase().includes(search.toLowerCase()) ||
     member.role.toLowerCase().includes(search.toLowerCase()) ||
-    member.department.toLowerCase().includes(search.toLowerCase())
+    (member.department || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const { 
@@ -121,8 +121,8 @@ export default function TeamTable({ performanceData, onDeleteMember, onEditMembe
                 </tr>
               ) : (
                 currentItems.map((member) => {
-                  const activeTasks = member.inProgress + member.pending;
-                  const rate = Math.round(member.completionRate);
+                  const activeTasks = member.activeTasks ?? ((member.inProgress ?? 0) + (member.pending ?? 0));
+                  const rate = Math.round(member.onTimeRate ? member.onTimeRate * 100 : (member.completionRate ?? 0));
 
                   return (
                     <tr

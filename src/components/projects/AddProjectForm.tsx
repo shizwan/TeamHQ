@@ -52,7 +52,7 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
       description: sanitizeString(description),
       status: 'Active',
       startDate: combinedStart,
-      dueDate: combinedDue,
+      targetDate: combinedDue || undefined,
     });
 
     setTitle('');

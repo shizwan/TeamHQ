@@ -118,11 +118,16 @@ export default function DeadlinesPage() {
     const weekTime = weekEnd.getTime();
 
     const activeTasks = tasks.filter(t => t.status !== 'Completed').sort(
-      (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+      (a, b) => {
+        const dateA = a.targetDueDate || a.dueDate ? new Date(a.targetDueDate || a.dueDate!).getTime() : 0;
+        const dateB = b.targetDueDate || b.dueDate ? new Date(b.targetDueDate || b.dueDate!).getTime() : 0;
+        return dateA - dateB;
+      }
     );
 
     activeTasks.forEach((task) => {
-      const taskTime = new Date(task.dueDate).getTime();
+      const taskDueDate = task.targetDueDate || task.dueDate;
+      const taskTime = taskDueDate ? new Date(taskDueDate).getTime() : 0;
       
       if (task.status === 'Overdue' || taskTime < nowTime) {
         overdue.push(task);

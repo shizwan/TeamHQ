@@ -5,7 +5,8 @@ import { Printer } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath } from '@/lib/firestorePaths';
-import { isOverdue, calculatePerformanceData } from '@/lib/validation';
+import { isOverdue } from '@/lib/validation';
+import { calculateTeamPerformance } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData } from '@/types';
 import Header from '@/components/layout/Header';
 import EmptyState from '@/components/ui/EmptyState';
@@ -32,11 +33,14 @@ export default function ReportsPage() {
   });
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => t.dueDate.startsWith(selectedMonth));
+    return tasks.filter((t) => {
+      const d = t.startDate || t.targetDueDate || t.dueDate;
+      return d ? String(d).startsWith(selectedMonth) : true;
+    });
   }, [tasks, selectedMonth]);
 
   const performanceData: PerformanceData[] = useMemo(() => {
-    return calculatePerformanceData(team, filteredTasks);
+    return calculateTeamPerformance(team, filteredTasks);
   }, [team, filteredTasks]);
 
   const { 
@@ -118,14 +122,14 @@ export default function ReportsPage() {
                 <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Efficiency Score</p>
-                    <p className={`text-lg font-bold ${member.total === 0 ? 'text-slate-400' : member.efficiencyScore >= 80 ? 'text-emerald-600' : member.efficiencyScore >= 50 ? 'text-amber-600' : 'text-rose-600'}`}>
-                      {member.total === 0 ? '-' : `${member.efficiencyScore}`}
+                    <p className={`text-lg font-bold ${(member.total ?? 0) === 0 ? 'text-slate-400' : (member.efficiencyScore ?? 0) >= 80 ? 'text-emerald-600' : (member.efficiencyScore ?? 0) >= 50 ? 'text-amber-600' : 'text-rose-600'}`}>
+                      {(member.total ?? 0) === 0 ? '-' : `${member.efficiencyScore ?? 0}`}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Overdue Tasks</p>
-                    <p className={`text-lg font-bold ${member.overdue > 0 ? 'text-rose-600' : member.total === 0 ? 'text-slate-400' : 'text-emerald-600'}`}>
-                      {member.total === 0 ? '-' : member.overdue}
+                    <p className={`text-lg font-bold ${(member.overdue ?? 0) > 0 ? 'text-rose-600' : (member.total ?? 0) === 0 ? 'text-slate-400' : 'text-emerald-600'}`}>
+                      {(member.total ?? 0) === 0 ? '-' : (member.overdue ?? 0)}
                     </p>
                   </div>
                 </div>

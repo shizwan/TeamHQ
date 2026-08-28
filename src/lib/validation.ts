@@ -42,15 +42,16 @@ export function validateTimeline(startDate: string, dueDate: string): string | n
   return null;
 }
 
-export function isOverdue(dueDate: string, status: string): boolean {
-  if (status === 'Completed') return false;
+import { calculateTeamPerformance } from '@/lib/trackerEngine';
+
+export function isOverdue(dueDate?: string | null, status?: string): boolean {
+  if (!dueDate || status === 'Completed') return false;
   const due = new Date(dueDate).getTime();
   const now = Date.now();
   return due < now;
 }
 
 export function getNowString(): string {
-  // Returns format YYYY-MM-DDTHH:mm for datetime-local min attribute
   const tzOffset = new Date().getTimezoneOffset() * 60000;
   const localISOTime = new Date(Date.now() - tzOffset).toISOString().slice(0, 16);
   return localISOTime;
@@ -63,6 +64,7 @@ export function getTodayString(): string {
 }
 
 export function calculateTaskDelay(task: { dueDate: string; completedAt?: string | null; status: string }): { isDelayed: boolean; delayMs: number; delayString: string } {
+  if (!task.dueDate) return { isDelayed: false, delayMs: 0, delayString: '' };
   const due = new Date(task.dueDate).getTime();
   let end = Date.now();
   if (task.status === 'Completed' && task.completedAt) {
@@ -94,49 +96,5 @@ export function calculateTaskDelay(task: { dueDate: string; completedAt?: string
 }
 
 export function calculatePerformanceData(team: TeamMember[], tasks: Task[]): PerformanceData[] {
-  return team.map((member) => {
-    const memberTasks = tasks.filter((t) => t.assigneeId === member.id);
-    const completedTasks = memberTasks.filter((t) => t.status === 'Completed');
-    const completed = completedTasks.length;
-    const overdue = memberTasks.filter(
-      (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
-    ).length;
-    const inProgress = memberTasks.filter((t) => t.status === 'In Progress').length;
-    const pending = memberTasks.length - completed - overdue - inProgress;
-    const total = memberTasks.length;
-
-    const onTimeCompleted = completedTasks.filter(t => t.completedAt && t.completedAt <= t.dueDate).length + completedTasks.filter(t => !t.completedAt).length; // assume on-time if missing timestamp
-    const lateCompleted = completed - onTimeCompleted;
-    const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-    // Efficiency Score Calculation
-    let score = 100;
-    if (total > 0) {
-      // Penalty for overdue active tasks
-      const overduePenalty = (overdue / total) * 100;
-      score -= overduePenalty;
-
-      // Penalty for tasks that were completed late
-      const latePenalty = completed > 0 ? (lateCompleted / completed) * 20 : 0;
-      score -= latePenalty;
-    }
-    const efficiencyScore = Math.max(0, Math.min(100, Math.round(score)));
-
-    return {
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      department: member.department,
-      createdAt: member.createdAt,
-      completed,
-      overdue,
-      inProgress,
-      pending: Math.max(0, pending),
-      total,
-      completionRate,
-      onTimeCompleted,
-      lateCompleted,
-      efficiencyScore,
-    };
-  });
+  return calculateTeamPerformance(team, tasks);
 }

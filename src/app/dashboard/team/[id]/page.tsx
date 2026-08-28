@@ -8,6 +8,7 @@ import { useCollection, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore'
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
 import { isOverdue, calculateTaskDelay } from '@/lib/validation';
+import { calculateTeamPerformance } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -69,40 +70,8 @@ export default function TeammateProfilePage() {
 
   const performance: PerformanceData | null = useMemo(() => {
     if (!member) return null;
-    const completedTasks = memberTasks.filter((t) => t.status === 'Completed');
-    const completed = completedTasks.length;
-    const overdue = memberTasks.filter(
-      (t) => t.status === 'Overdue' || isOverdue(t.dueDate, t.status)
-    ).length;
-    const inProgress = memberTasks.filter((t) => t.status === 'In Progress').length;
-    const pending = memberTasks.length - completed - overdue - inProgress;
-    const total = memberTasks.length;
-
-    const onTimeCompleted = completedTasks.filter(t => t.completedAt && t.completedAt <= t.dueDate).length + completedTasks.filter(t => !t.completedAt).length; // assume on-time if missing timestamp
-    const lateCompleted = completed - onTimeCompleted;
-    const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-    let score = completionRate;
-    score -= (overdue / (total || 1)) * 30; // -30% penalty
-    score += (onTimeCompleted / (completed || 1)) * 10; // +10% bonus
-    const efficiencyScore = total === 0 ? 0 : Math.max(0, Math.min(100, Math.round(score)));
-
-    return {
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      department: member.department,
-      createdAt: member.createdAt,
-      completed,
-      overdue,
-      inProgress,
-      pending: Math.max(0, pending),
-      total,
-      completionRate,
-      onTimeCompleted,
-      lateCompleted,
-      efficiencyScore,
-    };
+    const res = calculateTeamPerformance([member], memberTasks);
+    return res[0] || null;
   }, [member, memberTasks]);
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
@@ -209,26 +178,26 @@ export default function TeammateProfilePage() {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
-          label="Total Tasks"
-          value={performance.total}
+          label="Total Deliverables"
+          value={performance.total ?? 0}
           icon={<Briefcase className="h-6 w-6" />}
           colorClass="text-indigo-600 bg-indigo-50"
         />
         <MetricCard
           label="Completed"
-          value={performance.completed}
+          value={performance.completedTasks ?? 0}
           icon={<CheckCircle2 className="h-6 w-6" />}
           colorClass="text-emerald-600 bg-emerald-50"
         />
         <MetricCard
-          label="Active / Pending"
-          value={performance.inProgress + performance.pending}
+          label="Active Deliverables"
+          value={performance.activeTasks ?? 0}
           icon={<Briefcase className="h-6 w-6" />}
           colorClass="text-blue-600 bg-blue-50"
         />
         <MetricCard
-          label="Overdue"
-          value={performance.overdue}
+          label="Slips Logged"
+          value={performance.slipsLogged ?? 0}
           icon={<AlertTriangle className="h-6 w-6" />}
           colorClass="text-rose-600 bg-rose-50"
         />
@@ -246,7 +215,10 @@ export default function TeammateProfilePage() {
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm h-full flex flex-col">
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Delay Analysis</h3>
             {(() => {
-              const delayedTasks = memberTasks.map(t => ({ task: t, delay: calculateTaskDelay(t) })).filter(x => x.delay.isDelayed);
+              const delayedTasks = memberTasks.map(t => ({ 
+                task: t, 
+                delay: calculateTaskDelay({ dueDate: t.targetDueDate || t.dueDate || '', completedAt: t.completedAt, status: t.status }) 
+              })).filter(x => x.delay.isDelayed);
               
               if (delayedTasks.length === 0) {
                 return (
@@ -311,7 +283,7 @@ export default function TeammateProfilePage() {
                             </div>
                             <h4 className="font-semibold text-slate-800">{task.title}</h4>
                             <p className="text-xs text-slate-500 mt-1">
-                              Due: {new Date(task.dueDate).toLocaleDateString()} {new Date(task.dueDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              Due: {task.targetDueDate || task.dueDate ? new Date((task.targetDueDate || task.dueDate)!).toLocaleDateString() : 'N/A'} {task.targetDueTime || ''}
                             </p>
                           </div>
                           <div className="flex flex-col items-start sm:items-end bg-rose-50 px-3 py-2 rounded-lg border border-rose-100">

@@ -22,6 +22,9 @@ const STATUS_ACCENT: Record<TaskStatus, string> = {
   'In Progress': 'border-l-indigo-500',
   Completed: 'border-l-emerald-500',
   Overdue: 'border-l-rose-500',
+  'Carried Forward': 'border-l-amber-500',
+  Cancelled: 'border-l-slate-300',
+  Blocked: 'border-l-rose-600',
 };
 
 function getInitials(name: string): string {
@@ -33,7 +36,8 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-function formatShortDate(dateString: string): string {
+function formatShortDate(dateString?: string | null): string {
+  if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -71,12 +75,12 @@ export default function BoardTaskCard({
     transition,
   };
 
-  const overdue = isOverdue(task.dueDate, task.status);
+  const overdue = (task.delayHours ?? 0) > 0 || isOverdue(task.targetDueDate || task.dueDate || '', task.status);
   const isCompleted = task.status === 'Completed';
-  const labels = task.labels || [];
-  const checklist = task.checklist || [];
-  const checklistDone = checklist.filter((c) => c.done).length;
-  const checklistTotal = checklist.length;
+  const labelsArr: string[] = Array.isArray(task.labels) ? task.labels : typeof task.labels === 'string' ? JSON.parse(task.labels || '[]') : [];
+  const checklistArr = Array.isArray(task.checklist) ? task.checklist : typeof task.checklist === 'string' ? JSON.parse(task.checklist || '[]') : [];
+  const checklistDone = checklistArr.filter((c: any) => c.done).length;
+  const checklistTotal = checklistArr.length;
 
   return (
     <div
@@ -88,9 +92,9 @@ export default function BoardTaskCard({
     >
       <div className="p-3">
         {/* Labels row */}
-        {labels.length > 0 && (
+        {labelsArr.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
-            {labels.map((label) => {
+            {labelsArr.map((label) => {
               const style = getLabelStyle(label);
               return (
                 <span
@@ -126,7 +130,7 @@ export default function BoardTaskCard({
               }`}
             >
               <Clock className="w-3 h-3" />
-              <span>{formatShortDate(task.dueDate)}</span>
+              <span>{formatShortDate(task.targetDueDate || task.dueDate)}</span>
               {overdue && (
                 <span className="bg-rose-100 text-rose-700 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full">
                   Late

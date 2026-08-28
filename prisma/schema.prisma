@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -16,41 +16,55 @@ model User {
 
 model TeamMember {
   id         String   @id @default(uuid())
-  userId     String   // The owner of this data
+  userId     String   @default("admin-user")
   name       String
   role       String
   department String?
+  status     String   @default("Active") // 'Active' | 'Inactive'
+  manager    String?  @default("Shizwan")
   createdAt  DateTime @default(now())
   tasks      Task[]   @relation("TeamMemberTasks")
 }
 
 model Project {
-  id          String   @id @default(uuid())
-  userId      String   // The owner of this data
+  id          String    @id @default(uuid())
+  userId      String    @default("admin-user")
   title       String
   description String?
-  status      String   @default("Active") // 'Active' | 'Completed' | 'Archived'
-  startDate   DateTime
-  dueDate     DateTime?
-  createdAt   DateTime @default(now())
-  tasks       Task[]   @relation("ProjectTasks")
+  priority    String    @default("High") // 'Critical' | 'High' | 'Medium' | 'Low'
+  status      String    @default("Active") // 'Active' | 'Completed' | 'Archived'
+  leadOwner   String?   @default("Shizwan")
+  startDate   DateTime?
+  targetDate  DateTime?
+  createdAt   DateTime  @default(now())
+  tasks       Task[]    @relation("ProjectTasks")
 }
 
 model Task {
-  id          String    @id @default(uuid())
-  userId      String    // The owner of this data
-  projectId   String
-  assigneeId  String
-  title       String
-  status      String    @default("Pending") // 'Pending' | 'In Progress' | 'Completed' | 'Overdue'
-  startDate   DateTime
-  dueDate     DateTime
-  labels      String[]  @default([])
-  checklist   Json      @default("[]")
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  deliverableId   String?   // e.g. DLV-000001
+  userId          String    @default("admin-user")
+  projectId       String
+  assigneeId      String
+  title           String
+  status          String    @default("In Progress") // 'In Progress' | 'Completed' | 'Carried Forward' | 'Cancelled' | 'Blocked'
+  slipCause       String?   @default("N/A") // 'N/A' | 'Developer' | 'Dependency' | 'Scope Drift' | 'Environment/QA' | 'Unplanned Task'
+  startDate       DateTime?
+  targetDueDate   DateTime?
+  targetDueTime   String?   @default("10:00 PM") // ETA (01:00 PM to 10:00 PM)
+  completedDate   DateTime?
+  completedTime   String?   // 01:00 PM to 10:00 PM
+  daysActive      Int       @default(1)
+  delayHours      Float     @default(0)
+  onTimeStatus    String    @default("Pending") // 'Yes' | 'No' | 'Unverified' | 'Pending'
+  lifecycleStatus String    @default("🟢 In Progress")
+  labels          String?   @default("[]")
+  checklist       String?   @default("[]")
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  project     Project    @relation("ProjectTasks", fields: [projectId], references: [id], onDelete: Cascade)
-  assignee    TeamMember @relation("TeamMemberTasks", fields: [assigneeId], references: [id], onDelete: Cascade)
+  project  Project    @relation("ProjectTasks", fields: [projectId], references: [id], onDelete: Cascade)
+  assignee TeamMember @relation("TeamMemberTasks", fields: [assigneeId], references: [id], onDelete: Cascade)
 }
+

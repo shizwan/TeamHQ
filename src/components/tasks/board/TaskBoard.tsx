@@ -83,9 +83,12 @@ export default function TaskBoard({
   // Group tasks by status
   const tasksByStatus = useMemo(() => {
     const grouped: Record<TaskStatus, Task[]> = {
-      Pending: [],
       'In Progress': [],
       Completed: [],
+      'Carried Forward': [],
+      Blocked: [],
+      Cancelled: [],
+      Pending: [],
       Overdue: [],
     };
 
@@ -93,12 +96,13 @@ export default function TaskBoard({
       if (grouped[task.status]) {
         grouped[task.status].push(task);
       } else {
-        grouped['Pending'].push(task);
+        grouped['In Progress'].push(task);
       }
     }
 
     // Sort each group
     for (const status of TASK_STATUSES) {
+      if (!grouped[status]) continue;
       if (sortBy === 'name') {
         grouped[status].sort((a, b) => a.title.localeCompare(b.title));
       } else if (sortBy === 'newest') {
@@ -106,9 +110,11 @@ export default function TaskBoard({
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       } else {
-        grouped[status].sort(
-          (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-        );
+        grouped[status].sort((a, b) => {
+          const dA = a.targetDueDate || a.dueDate ? new Date(a.targetDueDate || a.dueDate!).getTime() : 0;
+          const dB = b.targetDueDate || b.dueDate ? new Date(b.targetDueDate || b.dueDate!).getTime() : 0;
+          return dA - dB;
+        });
       }
     }
 
