@@ -38,15 +38,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row" suppressHydrationWarning>
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row w-full max-w-full overflow-x-clip" suppressHydrationWarning>
       <Sidebar />
       <main
-        className={`flex-1 transition-all duration-300 ease-in-out min-h-screen ${
-          isCollapsed ? 'md:ml-20' : 'md:ml-64'
-        }`}
+        className="flex-1 min-w-0 min-h-screen flex flex-col transition-all duration-300 ease-in-out"
         suppressHydrationWarning
       >
-        <div className="w-full p-4 sm:p-6 lg:p-8 pb-16" suppressHydrationWarning>
+        <div className="w-full max-w-full p-4 sm:p-6 lg:p-8 pb-16 min-w-0" suppressHydrationWarning>
           <GlobalSearch />
           {children}
         </div>

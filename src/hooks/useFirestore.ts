@@ -48,9 +48,16 @@ export function useAddDoc(apiEndpoint: string | null) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to add document');
+      if (!res.ok) {
+        let errMsg = 'Failed to add document';
+        try {
+          const errJson = await res.json();
+          errMsg = errJson.error || errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
       const json = await res.json();
-      return json.id || true;
+      return json.id || json || true;
     } catch (err: any) {
       setError(err.message);
       throw err;
@@ -76,7 +83,14 @@ export function useUpdateDoc(apiEndpoint: string | null) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update document');
+      if (!res.ok) {
+        let errMsg = 'Failed to update document';
+        try {
+          const errJson = await res.json();
+          errMsg = errJson.error || errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
       return true;
     } catch (err: any) {
       setError(err.message);
@@ -101,7 +115,14 @@ export function useDeleteDoc(apiEndpoint: string | null) {
       const res = await fetch(`${apiEndpoint}/${id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Failed to delete document');
+      if (!res.ok) {
+        let errMsg = 'Failed to delete document';
+        try {
+          const errJson = await res.json();
+          errMsg = errJson.error || errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
       return true;
     } catch (err: any) {
       setError(err.message);

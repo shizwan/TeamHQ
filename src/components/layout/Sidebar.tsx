@@ -237,8 +237,8 @@ export default function Sidebar() {
 
       {/* Desktop sidebar */}
       <aside
-        className={`hidden h-screen flex-shrink-0 md:fixed md:inset-y-0 md:left-0 md:block transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'md:w-20' : 'md:w-64'
+        className={`hidden md:flex md:flex-col h-screen sticky top-0 flex-shrink-0 z-30 transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'w-20' : 'w-64'
         }`}
         aria-label="Desktop navigation"
       >
