@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
-import type { NewProjectForm } from '@/types';
+import { Plus, Loader2 } from 'lucide-react';
+import type { NewProjectForm, ProjectPriority } from '@/types';
 import { sanitizeString } from '@/lib/validation';
 
 interface AddProjectFormProps {
@@ -14,6 +14,8 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<ProjectPriority>('High');
+  const [leadOwner, setLeadOwner] = useState('Shizwan');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -24,45 +26,65 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
     e.preventDefault();
     setError(null);
 
-    if (!title.trim() || !description.trim()) {
-      setError('Title and description are required.');
-      return;
+    try {
+      if (!title.trim() || !description.trim()) {
+        setError('Title and description are required.');
+        return;
+      }
+
+      let combinedStart: string | undefined;
+      if (startDate) {
+        const timeVal = startTime || '09:00';
+        const parsed = new Date(`${startDate}T${timeVal}`);
+        if (isNaN(parsed.getTime())) {
+          setError('Please provide a valid start date and time.');
+          return;
+        }
+        combinedStart = parsed.toISOString();
+      } else {
+        combinedStart = new Date().toISOString();
+      }
+
+      let combinedDue: string | undefined;
+      if (dueDate) {
+        const timeVal = dueTime || '17:00';
+        const parsed = new Date(`${dueDate}T${timeVal}`);
+        if (isNaN(parsed.getTime())) {
+          setError('Please provide a valid due date and time.');
+          return;
+        }
+        combinedDue = parsed.toISOString();
+
+        if (combinedStart && new Date(combinedStart).getTime() >= parsed.getTime()) {
+          setError('Start time must be before the due time.');
+          return;
+        }
+      }
+
+      await onSubmit({
+        title: sanitizeString(title),
+        description: sanitizeString(description),
+        priority,
+        leadOwner: sanitizeString(leadOwner) || 'Shizwan',
+        status: 'Active',
+        startDate: combinedStart,
+        targetDate: combinedDue,
+      });
+
+      setTitle('');
+      setDescription('');
+      setPriority('High');
+      setLeadOwner('Shizwan');
+      setStartDate('');
+      setStartTime('');
+      setDueDate('');
+      setDueTime('');
+      setError(null);
+      setOpen(false);
+    } catch (err: any) {
+      console.error('Project form submission error:', err);
+      setError(err?.message || 'Failed to create project. Please try again.');
     }
-
-    if (!startDate || !startTime) {
-      setError('Start date and time are required.');
-      return;
-    }
-
-    if ((dueDate && !dueTime) || (!dueDate && dueTime)) {
-      setError('Both due date and due time must be provided if you want to set a deadline.');
-      return;
-    }
-
-    const combinedStart = new Date(`${startDate}T${startTime}`).toISOString();
-    const combinedDue = dueDate && dueTime ? new Date(`${dueDate}T${dueTime}`).toISOString() : null;
-
-    if (combinedDue && new Date(combinedStart).getTime() >= new Date(combinedDue).getTime()) {
-      setError('Start time must be before the due time.');
-      return;
-    }
-
-    await onSubmit({
-      title: sanitizeString(title),
-      description: sanitizeString(description),
-      status: 'Active',
-      startDate: combinedStart,
-      targetDate: combinedDue || undefined,
-    });
-
-    setTitle('');
-    setDescription('');
-    setStartDate('');
-    setStartTime('');
-    setDueDate('');
-    setDueTime('');
-    setError(null);
-    setOpen(false);
   };
 
   return (
@@ -70,20 +92,20 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 cursor-pointer"
         aria-expanded={open}
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
-        Create New Project
+        {open ? 'Close Project Form' : 'Create New Project'}
       </button>
 
       {open && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4 items-end"
+          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4 items-end animate-in fade-in duration-150"
         >
           <div className="flex flex-col gap-1.5 md:col-span-2">
-            <label htmlFor="project-title" className="text-sm font-medium text-slate-700">
+            <label htmlFor="project-title" className="text-sm font-semibold text-slate-700">
               Project Title <span className="text-rose-500">*</span>
             </label>
             <input
@@ -94,12 +116,12 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Website Redesign"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+              className="rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
             />
           </div>
 
           <div className="flex flex-col gap-1.5 md:col-span-2">
-            <label htmlFor="project-description" className="text-sm font-medium text-slate-700">
+            <label htmlFor="project-description" className="text-sm font-semibold text-slate-700">
               Description <span className="text-rose-500">*</span>
             </label>
             <input
@@ -109,37 +131,66 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
               maxLength={200}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Complete overhaul of the landing page"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+              placeholder="e.g. Complete overhaul of the landing page and backend portal"
+              className="rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">
-              Start Date & Time <span className="text-rose-500">*</span>
+            <label htmlFor="project-priority" className="text-sm font-semibold text-slate-700">
+              Priority
+            </label>
+            <select
+              id="project-priority"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as ProjectPriority)}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors cursor-pointer"
+            >
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="project-lead" className="text-sm font-semibold text-slate-700">
+              Lead Owner
+            </label>
+            <input
+              id="project-lead"
+              type="text"
+              value={leadOwner}
+              onChange={(e) => setLeadOwner(e.target.value)}
+              placeholder="e.g. Shizwan"
+              className="rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-700">
+              Start Date & Time (Optional)
             </label>
             <div className="flex gap-2">
               <input
                 type="date"
-                required
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Project start date"
               />
               <input
                 type="time"
-                required
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Project start time"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-semibold text-slate-700">
               Due Date & Time (Optional)
             </label>
             <div className="flex gap-2">
@@ -147,14 +198,14 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Project due date"
               />
               <input
                 type="time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Project due time"
               />
             </div>
@@ -164,9 +215,10 @@ export default function AddProjectForm({ onSubmit, loading }: AddProjectFormProp
             <button
               type="submit"
               disabled={loading}
-              className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {loading ? 'Creating…' : 'Create Project'}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Creating Project…' : 'Create Project'}
             </button>
           </div>
 

@@ -61,21 +61,26 @@ export default function TeamPage() {
 
   const handleAddMember = useCallback(
     async (data: NewMemberForm) => {
-      const result = await addDocument({
-        userId,
-        name: sanitizeString(data.name),
-        role: sanitizeString(data.role),
-        department: sanitizeString(data.department || ''),
-        status: 'Active',
-        manager: 'Shizwan',
-        createdAt: new Date().toISOString(),
-      });
+      try {
+        const result = await addDocument({
+          userId: userId || 'admin-user',
+          name: sanitizeString(data.name),
+          role: sanitizeString(data.role),
+          department: sanitizeString(data.department || ''),
+          status: 'Active',
+          manager: 'Shizwan',
+        });
 
-      if (result) {
-        addToast('success', 'Member added', `${sanitizeString(data.name)} has been added to the team.`);
-        refetchTeam();
-      } else {
-        addToast('error', 'Failed to add member', 'Please try again.');
+        if (result) {
+          addToast('success', 'Member added', `${sanitizeString(data.name)} has been added to the team.`);
+          refetchTeam();
+        } else {
+          addToast('error', 'Failed to add member', 'Please try again.');
+        }
+      } catch (err: any) {
+        console.error('Error adding member:', err);
+        addToast('error', 'Failed to add member', err?.message || 'Please try again.');
+        throw err;
       }
     },
     [addDocument, addToast, refetchTeam, userId]

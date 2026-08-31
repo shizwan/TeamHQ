@@ -20,17 +20,22 @@ export function validateMemberForm(form: { name: string; role: string; departmen
   return null;
 }
 
-export function validateTaskForm(form: { title: string; assigneeId: string; startDate: string; dueDate: string }): string | null {
-  const title = sanitizeString(form.title);
+export function validateTaskForm(form: { 
+  title: string; 
+  assigneeId: string; 
+  startDate?: string | null; 
+  dueDate?: string | null;
+}): string | null {
+  const title = sanitizeString(form.title || '');
 
   if (!title) return 'Task title is required.';
   if (title.length > MAX_TITLE_LENGTH) return `Title must be under ${MAX_TITLE_LENGTH} characters.`;
   if (!form.assigneeId) return 'Please select an assignee.';
-  if (!form.startDate) return 'Start date is required.';
-  if (!form.dueDate) return 'Due date is required.';
   
-  const timelineError = validateTimeline(form.startDate, form.dueDate);
-  if (timelineError) return timelineError;
+  if (form.startDate && form.dueDate) {
+    const timelineError = validateTimeline(form.startDate, form.dueDate);
+    if (timelineError) return timelineError;
+  }
 
   return null;
 }

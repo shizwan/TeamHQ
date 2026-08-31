@@ -18,7 +18,23 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const member = await prisma.teamMember.create({ data: body });
+
+    const name = (body.name || '').trim();
+    const role = (body.role || '').trim();
+    if (!name || !role) {
+      return NextResponse.json({ error: 'Name and role are required' }, { status: 400 });
+    }
+
+    const member = await prisma.teamMember.create({
+      data: {
+        userId: body.userId || 'admin-user',
+        name,
+        role,
+        department: body.department || '',
+        status: body.status || 'Active',
+        manager: body.manager || 'Shizwan',
+      },
+    });
 
     logActivity({
       userId: member.userId,
@@ -32,6 +48,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(member);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to create member' }, { status: 500 });
+    console.error('Failed to create team member:', error);
+    return NextResponse.json({ error: 'Failed to create member', details: String(error) }, { status: 500 });
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, LayoutGrid, Table as TableIcon, Edit2, Trash2 } from 'lucide-react';
+import { Search, LayoutGrid, Table as TableIcon, Edit2, Trash2, Eye } from 'lucide-react';
 import type { Task, TeamMember, Project, TaskStatus } from '@/types';
 import TaskCard from '@/components/tasks/TaskCard';
 import { usePagination } from '@/hooks/usePagination';
@@ -14,6 +14,7 @@ interface TaskGridProps {
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onEdit?: (task: Task) => void;
   onDelete: (taskId: string, title: string) => void;
+  onPreview?: (task: Task) => void;
 }
 
 export default function TaskGrid({
@@ -23,6 +24,7 @@ export default function TaskGrid({
   onStatusChange,
   onEdit,
   onDelete,
+  onPreview,
 }: TaskGridProps) {
   const [search, setSearch] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -156,6 +158,7 @@ export default function TaskGrid({
                 onStatusChange={onStatusChange}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onPreview={onPreview}
               />
             ))}
           </div>
@@ -200,11 +203,35 @@ export default function TaskGrid({
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-3 font-mono font-bold text-slate-800 whitespace-nowrap">
-                        {t.deliverableId || 'DLV-000000'}
+                        {onPreview ? (
+                          <button
+                            type="button"
+                            onClick={() => onPreview(t)}
+                            className="text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer font-mono font-bold"
+                            title="Preview deliverable details"
+                          >
+                            {t.deliverableId || 'DLV-000000'}
+                          </button>
+                        ) : (
+                          t.deliverableId || 'DLV-000000'
+                        )}
                       </td>
                       <td className="py-3 px-3 font-semibold text-slate-900 whitespace-nowrap">{memberName}</td>
                       <td className="py-3 px-3 text-slate-600 whitespace-nowrap">{projectTitle}</td>
-                      <td className="py-3 px-4 text-slate-900 font-semibold max-w-xs truncate">{t.title}</td>
+                      <td className="py-3 px-4 text-slate-900 font-semibold max-w-xs truncate">
+                        {onPreview ? (
+                          <button
+                            type="button"
+                            onClick={() => onPreview(t)}
+                            className="text-left text-slate-900 hover:text-indigo-600 cursor-pointer font-semibold max-w-full truncate block transition-colors"
+                            title="Preview deliverable details"
+                          >
+                            {t.title}
+                          </button>
+                        ) : (
+                          t.title
+                        )}
+                      </td>
                       <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
                         {t.startDate ? new Date(t.startDate).toLocaleDateString() : '-'}
                       </td>
@@ -255,7 +282,17 @@ export default function TaskGrid({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
+                          {onPreview && (
+                            <button
+                              type="button"
+                              onClick={() => onPreview(t)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                              title="Preview deliverable"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {onEdit && (
                             <button
                               type="button"

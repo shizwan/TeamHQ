@@ -25,6 +25,7 @@ interface TaskBoardProps {
   onDelete: (taskId: string, title: string) => void;
   onQuickAdd?: (status: TaskStatus) => void;
   onQuickComplete?: (taskId: string) => void;
+  onPreview?: (task: Task) => void;
 }
 
 export default function TaskBoard({
@@ -36,6 +37,7 @@ export default function TaskBoard({
   onDelete,
   onQuickAdd,
   onQuickComplete,
+  onPreview,
 }: TaskBoardProps) {
   const [activeTask, setActiveTask] = React.useState<Task | null>(null);
 
@@ -212,6 +214,7 @@ export default function TaskBoard({
               onDelete={onDelete}
               onQuickAdd={onQuickAdd}
               onQuickComplete={onQuickComplete}
+              onPreview={onPreview}
             />
           ))}
         </div>

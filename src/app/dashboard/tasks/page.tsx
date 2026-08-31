@@ -12,6 +12,7 @@ import Header from '@/components/layout/Header';
 import TaskGrid from '@/components/tasks/TaskGrid';
 import AddTaskForm from '@/components/tasks/AddTaskForm';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
+import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -34,6 +35,7 @@ export default function TasksPage() {
 
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
+  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
 
   // Derive active unarchived tasks & projects
   const activeProjects = useMemo(() => projects.filter(p => p.status === 'Active'), [projects]);
@@ -41,26 +43,25 @@ export default function TasksPage() {
 
   const handleAddTask = useCallback(
     async (data: NewTaskForm) => {
-      const now = new Date().toISOString();
-      const result = await addTask({
-        userId,
-        projectId: data.projectId,
-        title: sanitizeString(data.title),
-        assigneeId: data.assigneeId,
-        dueDate: data.dueDate,
-        status: data.status,
-        createdAt: now,
-        updatedAt: now,
-      });
+      try {
+        const result = await addTask({
+          ...data,
+          userId: userId || 'admin-user',
+        });
 
-      if (result) {
-        addToast('success', 'Task assigned', `"${data.title}" has been created.`);
-        refetchTasks();
-      } else {
-        addToast('error', 'Failed to create task', 'Please try again.');
+        if (result) {
+          addToast('success', 'Deliverable created', `"${data.title}" has been added.`);
+          refetchTasks();
+        } else {
+          addToast('error', 'Failed to create deliverable', 'Please try again.');
+        }
+      } catch (err: any) {
+        console.error('Error creating deliverable:', err);
+        addToast('error', 'Failed to create deliverable', err?.message || 'Please try again.');
+        throw err;
       }
     },
-    [addTask, addToast]
+    [addTask, addToast, refetchTasks, userId]
   );
 
   const handleStatusChange = useCallback(
@@ -149,11 +150,23 @@ export default function TasksPage() {
 
       <TaskGrid
         tasks={activeTasks}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onStatusChange={handleStatusChange}
         onEdit={setEditTaskTarget}
         onDelete={handleRequestDelete}
+        onPreview={setPreviewTaskTarget}
+      />
+
+      <TaskPreviewModal
+        isOpen={!!previewTaskTarget}
+        onClose={() => setPreviewTaskTarget(null)}
+        task={previewTaskTarget}
+        projects={activeProjects}
+        team={team}
+        onEdit={setEditTaskTarget}
+        onDelete={handleRequestDelete}
+        onStatusChange={handleStatusChange}
       />
 
       <ConfirmDialog
@@ -171,7 +184,7 @@ export default function TasksPage() {
         isOpen={!!editTaskTarget}
         onClose={() => setEditTaskTarget(null)}
         task={editTaskTarget}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onSubmit={handleEditTask}
         loading={false}

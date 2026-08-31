@@ -3,7 +3,7 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Clock, GripVertical, Trash2, Edit2, CheckCircle2, ListChecks } from 'lucide-react';
+import { Clock, GripVertical, Trash2, Edit2, CheckCircle2, ListChecks, Eye } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types';
 import { LABEL_PRESETS } from '@/types';
 import { isOverdue } from '@/lib/validation';
@@ -15,6 +15,7 @@ interface BoardTaskCardProps {
   onEdit?: (task: Task) => void;
   onDelete: (taskId: string, title: string) => void;
   onQuickComplete?: (taskId: string) => void;
+  onPreview?: (task: Task) => void;
 }
 
 const STATUS_ACCENT: Record<TaskStatus, string> = {
@@ -58,6 +59,7 @@ export default function BoardTaskCard({
   onEdit,
   onDelete,
   onQuickComplete,
+  onPreview,
 }: BoardTaskCardProps) {
   const {
     attributes,
@@ -110,7 +112,15 @@ export default function BoardTaskCard({
         )}
 
         {/* Title */}
-        <h4 className={`text-sm font-semibold line-clamp-2 leading-snug pr-1 ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+        <h4 
+          onClick={(e) => {
+            if (onPreview) {
+              e.stopPropagation();
+              onPreview(task);
+            }
+          }}
+          className={`text-sm font-semibold line-clamp-2 leading-snug pr-1 ${onPreview ? 'hover:text-indigo-600 cursor-pointer transition-colors' : ''} ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800'}`}
+        >
           {task.title}
         </h4>
 
@@ -163,6 +173,18 @@ export default function BoardTaskCard({
 
             {/* Action buttons — shown on hover */}
             <div className="hidden group-hover:flex items-center gap-0.5">
+              {onPreview && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onPreview(task); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                  aria-label={`Preview task: ${task.title}`}
+                  title="Preview deliverable"
+                >
+                  <Eye className="w-3 h-3" />
+                </button>
+              )}
               {onQuickComplete && !isCompleted && (
                 <button
                   type="button"

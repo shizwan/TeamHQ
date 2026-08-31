@@ -146,6 +146,7 @@ export default function GlobalSearch() {
   const { data: tasks } = useCollection<Task>(tasksPath);
   const { data: projects } = useCollection<Project>(projectsPath);
 
+  const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const teamMap = useMemo(() => {
@@ -156,9 +157,9 @@ export default function GlobalSearch() {
 
   const projectMap = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const p of projects) map[p.id] = p.title;
+    for (const p of activeProjects) map[p.id] = p.title;
     return map;
-  }, [projects]);
+  }, [activeProjects]);
 
   // Global keyboard shortcuts: Cmd+K, Ctrl+K, or "/"
   useEffect(() => {
@@ -269,8 +270,8 @@ export default function GlobalSearch() {
         };
       });
 
-    // 3. Projects
-    const matchedProjects: SearchResultItem[] = projects
+    // 3. Projects (Only active, unarchived projects)
+    const matchedProjects: SearchResultItem[] = activeProjects
       .filter((p) => {
         if (!q) return true;
         const title = (p.title || '').toLowerCase();
@@ -288,14 +289,14 @@ export default function GlobalSearch() {
       })
       .slice(0, 10)
       .map((p) => {
-        const taskCount = tasks.filter((t) => t.projectId === p.id).length;
+        const taskCount = activeTasks.filter((t) => t.projectId === p.id).length;
         return {
           id: `project-${p.id}`,
           category: 'projects' as const,
           title: p.title,
           subtitle: `${p.leadOwner ? `Lead: ${p.leadOwner} • ` : ''}${taskCount} deliverable(s) • ${p.description || 'Project roadmap'}`,
           badge: `${p.priority || 'Medium'} Priority`,
-          badgeColor: p.status === 'Archived' ? 'bg-slate-100 text-slate-600 border border-slate-200/60' : 'bg-blue-50 text-blue-700 border border-blue-200/60',
+          badgeColor: 'bg-blue-50 text-blue-700 border border-blue-200/60',
           tag: p.status,
           href: '/dashboard/projects',
           iconType: 'project' as const,

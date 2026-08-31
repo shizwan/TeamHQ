@@ -185,32 +185,34 @@ export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): Per
 
 // Compute Project Performance & Health
 export function calculateProjectPerformance(projects: Project[], tasks: Task[]): ProjectPerformanceData[] {
-  return projects.map((p) => {
-    const pTasks = tasks.filter((t) => t.projectId === p.id);
-    const activeTasks = pTasks.filter((t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked').length;
-    const completedTasks = pTasks.filter((t) => t.status === 'Completed').length;
-    const total = pTasks.length;
+  return projects
+    .filter((p) => p.status !== 'Archived')
+    .map((p) => {
+      const pTasks = tasks.filter((t) => t.projectId === p.id);
+      const activeTasks = pTasks.filter((t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked').length;
+      const completedTasks = pTasks.filter((t) => t.status === 'Completed').length;
+      const total = pTasks.length;
 
-    let health: ProjectHealth = '⚪ Inactive / Queue';
-    if (total === 0) {
-      health = '⚪ Inactive / Queue';
-    } else if (activeTasks === 0 && completedTasks > 0) {
-      health = '🟢 On Track (100%)';
-    } else if (activeTasks > 0) {
-      health = '🟡 Active Progress';
-    }
+      let health: ProjectHealth = '⚪ Inactive / Queue';
+      if (total === 0) {
+        health = '⚪ Inactive / Queue';
+      } else if (activeTasks === 0 && completedTasks > 0) {
+        health = '🟢 On Track (100%)';
+      } else if (activeTasks > 0) {
+        health = '🟡 Active Progress';
+      }
 
-    return {
-      id: p.id,
-      title: p.title,
-      priority: p.priority || 'High',
-      status: p.status,
-      leadOwner: p.leadOwner || 'Shizwan',
-      activeTasks,
-      completedTasks,
-      health,
-    };
-  });
+      return {
+        id: p.id,
+        title: p.title,
+        priority: p.priority || 'High',
+        status: p.status,
+        leadOwner: p.leadOwner || 'Shizwan',
+        activeTasks,
+        completedTasks,
+        health,
+      };
+    });
 }
 
 // Global Task Metrics Counter

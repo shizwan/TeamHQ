@@ -22,6 +22,7 @@ interface BoardColumnProps {
   onDelete: (taskId: string, title: string) => void;
   onQuickAdd?: (status: TaskStatus) => void;
   onQuickComplete?: (taskId: string) => void;
+  onPreview?: (task: Task) => void;
 }
 
 const COLUMN_STYLES: Record<TaskStatus, { bg: string; accent: string; dot: string; headerBg: string }> = {
@@ -86,6 +87,7 @@ export default function BoardColumn({
   onDelete,
   onQuickAdd,
   onQuickComplete,
+  onPreview,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${status}`,
@@ -223,6 +225,7 @@ export default function BoardColumn({
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onQuickComplete={onQuickComplete}
+                    onPreview={onPreview}
                   />
                 ))
               )}

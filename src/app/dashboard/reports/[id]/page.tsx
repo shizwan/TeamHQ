@@ -38,6 +38,7 @@ export default function IndividualReportPage() {
   })();
   const [selectedMonth, setSelectedMonth] = React.useState(initialMonth);
 
+  const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
   const memberTasks = useMemo(() => 
@@ -120,7 +121,7 @@ export default function IndividualReportPage() {
       />
 
       <div className="mt-8">
-        <MemberReport member={performance} tasks={memberTasks} projects={projects} />
+        <MemberReport member={performance} tasks={memberTasks} projects={activeProjects} />
       </div>
     </>
   );

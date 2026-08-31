@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Trash2, Users, Edit2 } from 'lucide-react';
+import { Trash2, Users, Edit2, Eye } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types';
 import { TASK_STATUSES, STATUS_STYLES } from '@/types';
 import { isOverdue } from '@/lib/validation';
@@ -13,6 +13,7 @@ interface TaskCardProps {
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onDelete: (taskId: string, title: string) => void;
   onEdit?: (task: Task) => void;
+  onPreview?: (task: Task) => void;
 }
 
 function formatDate(dateString?: string | null, timeString?: string | null): string {
@@ -40,13 +41,14 @@ export default function TaskCard({
   onStatusChange,
   onDelete,
   onEdit,
+  onPreview,
 }: TaskCardProps) {
   const overdue = (task.delayHours ?? 0) > 0 || isOverdue(task.targetDueDate || task.dueDate || '', task.status);
 
   return (
     <article className="group bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
       <div>
-        {/* Top row: unified status select dropdown + edit/delete buttons */}
+        {/* Top row: unified status select dropdown + preview/edit/delete buttons */}
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="min-w-0 flex-1">
             <select
@@ -68,6 +70,17 @@ export default function TaskCard({
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            {onPreview && (
+              <button
+                type="button"
+                onClick={() => onPreview(task)}
+                className="inline-flex items-center rounded-lg p-1.5 text-slate-400 transition-all hover:text-indigo-600 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 cursor-pointer"
+                aria-label={`Preview task: ${task.title}`}
+                title="Preview deliverable"
+              >
+                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"
@@ -97,7 +110,10 @@ export default function TaskCard({
             {projectName}
           </div>
         )}
-        <h4 className={`${projectName ? 'mt-0' : 'mt-3'} font-semibold text-slate-800 line-clamp-2 text-sm leading-snug`}>
+        <h4 
+          onClick={() => onPreview && onPreview(task)}
+          className={`${projectName ? 'mt-0' : 'mt-3'} font-semibold text-slate-800 line-clamp-2 text-sm leading-snug ${onPreview ? 'hover:text-indigo-600 cursor-pointer transition-colors' : ''}`}
+        >
           {task.title}
         </h4>
 

@@ -12,6 +12,7 @@ import Header from '@/components/layout/Header';
 import TaskBoard from '@/components/tasks/board/TaskBoard';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
+import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -35,8 +36,10 @@ export default function BoardPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [addTaskTargetStatus, setAddTaskTargetStatus] = React.useState<TaskStatus | null>(null);
+  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
 
-  // Filter out tasks of archived projects
+  // Filter out archived projects & tasks of archived projects
+  const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const handleStatusChange = useCallback(
@@ -156,13 +159,25 @@ export default function BoardPage() {
 
       <TaskBoard
         tasks={activeTasks}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onStatusChange={handleStatusChange}
         onEdit={setEditTaskTarget}
         onDelete={handleRequestDelete}
         onQuickAdd={handleQuickAdd}
         onQuickComplete={handleQuickComplete}
+        onPreview={setPreviewTaskTarget}
+      />
+
+      <TaskPreviewModal
+        isOpen={!!previewTaskTarget}
+        onClose={() => setPreviewTaskTarget(null)}
+        task={previewTaskTarget}
+        projects={activeProjects}
+        team={team}
+        onEdit={setEditTaskTarget}
+        onDelete={handleRequestDelete}
+        onStatusChange={handleStatusChange}
       />
 
       <ConfirmDialog
@@ -180,7 +195,7 @@ export default function BoardPage() {
         isOpen={!!editTaskTarget}
         onClose={() => setEditTaskTarget(null)}
         task={editTaskTarget}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onSubmit={handleEditTask}
         loading={false}
@@ -190,7 +205,7 @@ export default function BoardPage() {
         isOpen={!!addTaskTargetStatus}
         onClose={() => setAddTaskTargetStatus(null)}
         defaultStatus={addTaskTargetStatus}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onSubmit={handleCreateTask}
         loading={addingTask}

@@ -31,7 +31,7 @@ export default function ProjectsPage() {
   const { updateDocument } = useUpdateDoc(projectsPath);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('Active');
   const [projectToArchive, setProjectToArchive] = useState<Project | null>(null);
   const [projectToUnarchive, setProjectToUnarchive] = useState<Project | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -68,19 +68,23 @@ export default function ProjectsPage() {
 
   const handleAddProject = useCallback(
     async (data: NewProjectForm) => {
-      const now = new Date().toISOString();
-      const result = await addProject({
-        ...data,
-        userId,
-        createdAt: now,
-      });
+      try {
+        const result = await addProject({
+          ...data,
+          userId: userId || 'admin-user',
+        });
 
-      if (result) {
-        addToast('success', 'Project created', `"${data.title}" has been created.`);
-        refetchProjects();
-        goToPage(1); // Jump to first page to see the new project (assuming sorting puts it there, or just as a reset)
-      } else {
-        addToast('error', 'Failed to create project', 'Please try again.');
+        if (result) {
+          addToast('success', 'Project created', `"${data.title}" has been created.`);
+          refetchProjects();
+          goToPage(1);
+        } else {
+          addToast('error', 'Failed to create project', 'Please try again.');
+        }
+      } catch (err: any) {
+        console.error('Error creating project:', err);
+        addToast('error', 'Failed to create project', err?.message || 'Please try again.');
+        throw err;
       }
     },
     [addProject, addToast, goToPage, refetchProjects, userId]
@@ -177,10 +181,10 @@ export default function ProjectsPage() {
             className="w-full rounded-lg border border-slate-300 py-2 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
             aria-label="Filter by status"
           >
-            <option value="All">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Completed">Completed</option>
-            <option value="Archived">Archived</option>
+            <option value="Active">Active ({projects.filter((p) => p.status === 'Active').length})</option>
+            <option value="Completed">Completed ({projects.filter((p) => p.status === 'Completed').length})</option>
+            <option value="Archived">Archived ({projects.filter((p) => p.status === 'Archived').length})</option>
+            <option value="All">All Statuses ({projects.length})</option>
           </select>
         </div>
       </div>

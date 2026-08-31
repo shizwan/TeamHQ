@@ -13,16 +13,18 @@ import {
   Users, 
   FolderKanban, 
   RotateCcw,
-  Zap
+  Zap,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCollection } from '@/hooks/useFirestore';
+import { useCollection, useUpdateDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { calculateTeamPerformance, calculateProjectPerformance, calculateGlobalTaskMetrics, filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, Project, SlipCause, TaskStatus } from '@/types';
 import Header from '@/components/layout/Header';
 import MetricCard from '@/components/dashboard/MetricCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -30,20 +32,23 @@ export default function DashboardPage() {
 
   const { data: team, loading: teamLoading } = useCollection<TeamMember>(getTeamCollectionPath(userId));
   const { data: projects, loading: projectsLoading } = useCollection<Project>(getProjectsCollectionPath(userId));
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(getTasksCollectionPath(userId));
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(getTasksCollectionPath(userId));
+  const { updateDocument: updateTask } = useUpdateDoc(getTasksCollectionPath(userId));
 
   // Filters for Live Deliverables Feed
   const [selectedMember, setSelectedMember] = useState<string>('All');
   const [selectedProject, setSelectedProject] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [selectedSlipCause, setSelectedSlipCause] = useState<string>('All');
+  const [previewTaskTarget, setPreviewTaskTarget] = useState<Task | null>(null);
 
-  // Filter out tasks of archived projects
+  // Filter out archived projects & tasks belonging to archived projects
+  const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   // Engine Calculations
   const teamMatrix = useMemo(() => calculateTeamPerformance(team, activeTasks), [team, activeTasks]);
-  const projectMatrix = useMemo(() => calculateProjectPerformance(projects, activeTasks), [projects, activeTasks]);
+  const projectMatrix = useMemo(() => calculateProjectPerformance(activeProjects, activeTasks), [activeProjects, activeTasks]);
   const globalMetrics = useMemo(() => calculateGlobalTaskMetrics(activeTasks), [activeTasks]);
 
   // Executive Callout Lists
@@ -64,9 +69,9 @@ export default function DashboardPage() {
 
   const projectMap = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const p of projects) map[p.id] = p.title;
+    for (const p of activeProjects) map[p.id] = p.title;
     return map;
-  }, [projects]);
+  }, [activeProjects]);
 
   // Filtered Deliverables
   const filteredTasks = useMemo(() => {
@@ -306,8 +311,8 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedProject(e.target.value)}
               className="w-full rounded-xl border border-slate-300 py-2 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
             >
-              <option value="All">All Projects ({projects.length})</option>
-              {projects.map((p) => (
+              <option value="All">All Projects ({activeProjects.length})</option>
+              {activeProjects.map((p) => (
                 <option key={p.id} value={p.title}>{p.title}</option>
               ))}
             </select>
@@ -377,6 +382,7 @@ export default function DashboardPage() {
                   <th className="py-3 px-3 text-center">Days Active</th>
                   <th className="py-3 px-3 text-center">Delay (Hrs)</th>
                   <th className="py-3 px-3 text-center">Lifecycle Status</th>
+                  <th className="py-3 px-3 text-right">Preview</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-xs">
@@ -386,11 +392,27 @@ export default function DashboardPage() {
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-3 font-mono font-bold text-slate-800 whitespace-nowrap">
-                        {t.deliverableId || 'DLV-000000'}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTaskTarget(t)}
+                          className="text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer font-mono font-bold"
+                          title="Preview deliverable details"
+                        >
+                          {t.deliverableId || 'DLV-000000'}
+                        </button>
                       </td>
                       <td className="py-3 px-3 font-semibold text-slate-900 whitespace-nowrap">{memberName}</td>
                       <td className="py-3 px-3 text-slate-600 whitespace-nowrap">{projectTitle}</td>
-                      <td className="py-3 px-4 text-slate-900 font-semibold max-w-xs truncate">{t.title}</td>
+                      <td className="py-3 px-4 text-slate-900 font-semibold max-w-xs truncate">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTaskTarget(t)}
+                          className="text-left text-slate-900 hover:text-indigo-600 cursor-pointer font-semibold max-w-full truncate block transition-colors"
+                          title="Preview deliverable details"
+                        >
+                          {t.title}
+                        </button>
+                      </td>
                       <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
                         {t.startDate ? new Date(t.startDate).toLocaleDateString() : '-'}
                       </td>
@@ -429,6 +451,16 @@ export default function DashboardPage() {
                           {t.lifecycleStatus || '🟢 In Progress'}
                         </span>
                       </td>
+                      <td className="py-3 px-3 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTaskTarget(t)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                          title="Preview deliverable details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -437,6 +469,30 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      <TaskPreviewModal
+        isOpen={!!previewTaskTarget}
+        onClose={() => setPreviewTaskTarget(null)}
+        task={previewTaskTarget}
+        projects={activeProjects}
+        team={team}
+        onStatusChange={async (taskId, newStatus) => {
+          const updateData: Partial<Task> = {
+            status: newStatus,
+            updatedAt: new Date().toISOString(),
+          };
+          if (newStatus === 'Completed') {
+            updateData.completedAt = new Date().toISOString();
+          } else {
+            updateData.completedAt = null;
+          }
+          await updateTask(taskId, updateData);
+          refetchTasks();
+          if (previewTaskTarget && previewTaskTarget.id === taskId) {
+            setPreviewTaskTarget((prev) => prev ? { ...prev, ...updateData } : null);
+          }
+        }}
+      />
     </>
   );
 }

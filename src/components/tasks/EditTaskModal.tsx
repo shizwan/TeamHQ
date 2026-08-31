@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import type { TeamMember, Project, Task, TaskStatus, SlipCause } from '@/types';
 import { TASK_STATUSES, SLIP_CAUSES, TIME_SLOTS, MAX_TITLE_LENGTH } from '@/types';
 import { sanitizeString } from '@/lib/validation';
@@ -16,7 +16,15 @@ interface EditTaskModalProps {
   loading: boolean;
 }
 
-export default function EditTaskModal({ isOpen, onClose, task, projects, team, onSubmit, loading }: EditTaskModalProps) {
+export default function EditTaskModal({
+  isOpen,
+  onClose,
+  task,
+  projects,
+  team,
+  onSubmit,
+  loading,
+}: EditTaskModalProps) {
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -35,18 +43,23 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
       setStatus((task.status as TaskStatus) || 'In Progress');
       setSlipCause((task.slipCause as SlipCause) || 'N/A');
       setTargetDueTime(task.targetDueTime || '10:00 PM');
-      
+      setError(null);
+
       try {
         if (task.startDate) {
-          setStartDate(new Date(task.startDate).toISOString().split('T')[0]);
+          const s = new Date(task.startDate);
+          if (!isNaN(s.getTime())) {
+            setStartDate(s.toISOString().split('T')[0]);
+          }
         }
         const due = task.targetDueDate || task.dueDate;
         if (due) {
-          setTargetDueDate(new Date(due).toISOString().split('T')[0]);
+          const d = new Date(due);
+          if (!isNaN(d.getTime())) {
+            setTargetDueDate(d.toISOString().split('T')[0]);
+          }
         }
-      } catch (e) {
-        // Date parsing catch
-      }
+      } catch (e) {}
     }
   }, [task, isOpen]);
 
@@ -55,40 +68,62 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
     setError(null);
 
     if (!task) return;
-    if (!projectId) {
-      setError('Please select a project.');
-      return;
-    }
-    if (!assigneeId) {
-      setError('Please select an assignee.');
-      return;
-    }
 
-    await onSubmit(task.id, {
-      projectId,
-      title: sanitizeString(title),
-      assigneeId,
-      startDate: startDate ? new Date(startDate).toISOString() : undefined,
-      targetDueDate: targetDueDate ? new Date(targetDueDate).toISOString() : undefined,
-      dueDate: targetDueDate ? new Date(targetDueDate).toISOString() : undefined,
-      targetDueTime,
-      status,
-      slipCause,
-      updatedAt: new Date().toISOString()
-    });
+    try {
+      if (!projectId) {
+        setError('Please select a project.');
+        return;
+      }
+      if (!assigneeId) {
+        setError('Please select an assignee.');
+        return;
+      }
+      if (!title.trim()) {
+        setError('Please enter a deliverable description.');
+        return;
+      }
 
-    onClose();
+      let parsedStart: string | undefined;
+      if (startDate) {
+        const s = new Date(startDate);
+        if (!isNaN(s.getTime())) parsedStart = s.toISOString();
+      }
+
+      let parsedDue: string | undefined;
+      if (targetDueDate) {
+        const d = new Date(targetDueDate);
+        if (!isNaN(d.getTime())) parsedDue = d.toISOString();
+      }
+
+      await onSubmit(task.id, {
+        projectId,
+        title: sanitizeString(title),
+        assigneeId,
+        startDate: parsedStart,
+        targetDueDate: parsedDue,
+        dueDate: parsedDue,
+        targetDueTime,
+        status,
+        slipCause,
+        updatedAt: new Date().toISOString(),
+      });
+
+      onClose();
+    } catch (err: any) {
+      console.error('Edit task error:', err);
+      setError(err?.message || 'Failed to update deliverable. Please try again.');
+    }
   };
 
   if (!isOpen || !task) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-bold text-slate-800">Edit Deliverable</h3>
-            <span className="font-mono text-xs px-2 py-0.5 bg-slate-100 font-bold rounded text-slate-700">
+            <span className="font-mono text-xs px-2.5 py-1 bg-slate-200/80 font-bold rounded-lg text-slate-800">
               {task.deliverableId || 'DLV-000000'}
             </span>
           </div>
@@ -112,12 +147,14 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
                 required
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
               >
                 <option value="">Select Project</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
-                ))}
+                {projects
+                  .filter((p) => p.status !== 'Archived')
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
               </select>
             </div>
 
@@ -130,7 +167,7 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
                 required
                 value={assigneeId}
                 onChange={(e) => setAssigneeId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
               >
                 <option value="">Select Member</option>
                 {team.map((member) => (
@@ -188,7 +225,7 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
               <select
                 value={targetDueTime}
                 onChange={(e) => setTargetDueTime(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
               >
                 {TIME_SLOTS.map((slot) => (
                   <option key={slot} value={slot}>{slot}</option>
@@ -206,7 +243,7 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
               >
                 {TASK_STATUSES.map((st) => (
                   <option key={st} value={st}>{st}</option>
@@ -221,7 +258,7 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
               <select
                 value={slipCause}
                 onChange={(e) => setSlipCause(e.target.value as SlipCause)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
               >
                 {SLIP_CAUSES.map((cause) => (
                   <option key={cause} value={cause}>{cause}</option>
@@ -241,7 +278,7 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -250,7 +287,8 @@ export default function EditTaskModal({ isOpen, onClose, task, projects, team, o
               disabled={loading}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Saving...' : 'Update Deliverable'}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Saving…' : 'Update Deliverable'}
             </button>
           </div>
         </form>

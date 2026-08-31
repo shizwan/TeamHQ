@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Check } from 'lucide-react';
+import { X, Plus, Trash2, Check, Loader2 } from 'lucide-react';
 import type { TeamMember, Project, ChecklistItem, TaskStatus, NewTaskForm } from '@/types';
 import { MAX_TITLE_LENGTH, LABEL_PRESETS } from '@/types';
 import { validateTaskForm, sanitizeString } from '@/lib/validation';
@@ -16,7 +16,15 @@ interface AddTaskModalProps {
   loading: boolean;
 }
 
-export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects, team, onSubmit, loading }: AddTaskModalProps) {
+export default function AddTaskModal({
+  isOpen,
+  onClose,
+  defaultStatus,
+  projects,
+  team,
+  onSubmit,
+  loading,
+}: AddTaskModalProps) {
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -37,14 +45,15 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
       setLabels([]);
       setChecklist([]);
       setNewChecklistItem('');
-      
+      setError(null);
+
       const now = new Date();
       setStartDate(now.toISOString().split('T')[0]);
-      setStartTime(now.toTimeString().slice(0, 5));
-      
+      setStartTime('09:00');
+
       const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       setDueDate(nextWeek.toISOString().split('T')[0]);
-      setDueTime(nextWeek.toTimeString().slice(0, 5));
+      setDueTime('17:00');
     }
   }, [isOpen, projects, team]);
 
@@ -52,56 +61,84 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
     e.preventDefault();
     setError(null);
 
-    if (!projectId) {
-      setError('Please select a project.');
-      return;
+    try {
+      if (!projectId) {
+        setError('Please select a project.');
+        return;
+      }
+
+      if (!assigneeId) {
+        setError('Please select an assignee.');
+        return;
+      }
+
+      if (!title.trim()) {
+        setError('Please enter a task title.');
+        return;
+      }
+
+      let combinedStart: string | undefined;
+      if (startDate) {
+        const timeVal = startTime || '09:00';
+        const parsed = new Date(`${startDate}T${timeVal}`);
+        if (!isNaN(parsed.getTime())) {
+          combinedStart = parsed.toISOString();
+        }
+      }
+      if (!combinedStart) combinedStart = new Date().toISOString();
+
+      let combinedDue: string | undefined;
+      if (dueDate) {
+        const timeVal = dueTime || '17:00';
+        const parsed = new Date(`${dueDate}T${timeVal}`);
+        if (!isNaN(parsed.getTime())) {
+          combinedDue = parsed.toISOString();
+        }
+      }
+
+      const validationError = validateTaskForm({
+        title,
+        assigneeId,
+        startDate: combinedStart,
+        dueDate: combinedDue,
+      });
+
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      await onSubmit({
+        projectId,
+        title: sanitizeString(title),
+        assigneeId,
+        startDate: combinedStart,
+        targetDueDate: combinedDue,
+        dueDate: combinedDue,
+        targetDueTime: dueTime ? dueTime : '10:00 PM',
+        status: defaultStatus || 'In Progress',
+        labels,
+        checklist,
+      });
+
+      onClose();
+    } catch (err: any) {
+      console.error('Task submission error:', err);
+      setError(err?.message || 'Failed to create task. Please try again.');
     }
-
-    if (!startDate || !startTime || !dueDate || !dueTime) {
-      setError('Both start and due dates and times are required.');
-      return;
-    }
-
-    const combinedStart = new Date(`${startDate}T${startTime}`).toISOString();
-    const combinedDue = new Date(`${dueDate}T${dueTime}`).toISOString();
-
-    const validationError = validateTaskForm({ 
-      title, 
-      assigneeId, 
-      startDate: combinedStart,
-      dueDate: combinedDue 
-    });
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    await onSubmit({
-      projectId,
-      title: sanitizeString(title),
-      assigneeId,
-      startDate: combinedStart,
-      dueDate: combinedDue,
-      status: defaultStatus || 'Pending',
-      labels,
-      checklist,
-    });
-
-    onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
-        <div className="flex justify-between items-center p-6 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800">Add Task</h3>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h3 className="text-lg font-bold text-slate-800">Add New Deliverable</h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors cursor-pointer"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
@@ -109,89 +146,89 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
         </div>
 
         <form
-          id="edit-task-modal"
+          id="add-task-modal"
           onSubmit={handleSubmit}
           className="p-6 grid grid-cols-1 md:grid-cols-6 gap-4 items-end"
         >
           {/* Project */}
-          <div className="flex flex-col gap-1.5 md:col-span-2">
-            <label htmlFor="edit-task-project" className="text-sm font-medium text-slate-700">
+          <div className="flex flex-col gap-1.5 md:col-span-3">
+            <label htmlFor="add-task-project" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               Project <span className="text-rose-500">*</span>
             </label>
             <select
-              id="edit-task-project"
+              id="add-task-project"
               required
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors cursor-pointer"
             >
               <option value="">Select project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
+              {projects
+                .filter((p) => p.status !== 'Archived')
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* Assignee */}
+          <div className="flex flex-col gap-1.5 md:col-span-3">
+            <label htmlFor="add-task-assignee" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Assignee <span className="text-rose-500">*</span>
+            </label>
+            <select
+              id="add-task-assignee"
+              required
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors cursor-pointer"
+            >
+              <option value="">Select member</option>
+              {team.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} ({member.role})
                 </option>
               ))}
             </select>
           </div>
 
           {/* Task Description */}
-          <div className="flex flex-col gap-1.5 md:col-span-2">
-            <label htmlFor="edit-task-title" className="text-sm font-medium text-slate-700">
-              Task Description <span className="text-rose-500">*</span>
+          <div className="flex flex-col gap-1.5 md:col-span-6">
+            <label htmlFor="add-task-title" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Deliverable Title & Scope <span className="text-rose-500">*</span>
             </label>
             <input
-              id="edit-task-title"
+              id="add-task-title"
               type="text"
               required
               maxLength={MAX_TITLE_LENGTH}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Redesign landing page"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+              placeholder="e.g. Database schema optimization for student headcount audit"
+              className="rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
             />
-          </div>
-
-          {/* Assignee */}
-          <div className="flex flex-col gap-1.5 md:col-span-2">
-            <label htmlFor="edit-task-assignee" className="text-sm font-medium text-slate-700">
-              Assignee <span className="text-rose-500">*</span>
-            </label>
-            <select
-              id="edit-task-assignee"
-              required
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-            >
-              <option value="">Select member</option>
-              {team.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           {/* Start Date & Time */}
           <div className="flex flex-col gap-1.5 md:col-span-3">
-            <label className="text-sm font-medium text-slate-700">
-              Start Date & Time <span className="text-rose-500">*</span>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Start Date & Time
             </label>
             <div className="flex gap-2">
               <input
                 type="date"
-                required
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Task start date"
               />
               <input
                 type="time"
-                required
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Task start time"
               />
             </div>
@@ -199,24 +236,22 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
 
           {/* Due Date & Time */}
           <div className="flex flex-col gap-1.5 md:col-span-3">
-            <label className="text-sm font-medium text-slate-700">
-              Deadline & Time <span className="text-rose-500">*</span>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Deadline & Time
             </label>
             <div className="flex gap-2">
               <input
                 type="date"
-                required
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Task due date"
               />
               <input
                 type="time"
-                required
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 aria-label="Task due time"
               />
             </div>
@@ -224,7 +259,7 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
 
           {/* Labels */}
           <div className="flex flex-col gap-1.5 md:col-span-6">
-            <label className="text-sm font-medium text-slate-700">Labels</label>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Labels</label>
             <div className="flex flex-wrap gap-2">
               {LABEL_PRESETS.map((preset) => {
                 const isActive = labels.includes(preset.name);
@@ -239,10 +274,10 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
                         setLabels([...labels, preset.name]);
                       }
                     }}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
                       isActive
                         ? `${preset.color} ${preset.textColor} border-transparent shadow-sm scale-105`
-                        : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                     }`}
                   >
                     {isActive && <Check className="w-3 h-3" />}
@@ -255,8 +290,8 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
 
           {/* Checklist */}
           <div className="flex flex-col gap-1.5 md:col-span-6">
-            <label className="text-sm font-medium text-slate-700">
-              Checklist {checklist.length > 0 && <span className="text-slate-400">({checklist.filter(c => c.done).length}/{checklist.length})</span>}
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Checklist {checklist.length > 0 && <span className="text-slate-400">({checklist.filter((c) => c.done).length}/{checklist.length})</span>}
             </label>
             <div className="space-y-1.5">
               {checklist.map((item, idx) => (
@@ -268,7 +303,7 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
                       updated[idx] = { ...updated[idx], done: !updated[idx].done };
                       setChecklist(updated);
                     }}
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer ${
                       item.done
                         ? 'bg-emerald-500 border-emerald-500 text-white'
                         : 'border-slate-300 hover:border-indigo-400'
@@ -282,7 +317,7 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
                   <button
                     type="button"
                     onClick={() => setChecklist(checklist.filter((_, i) => i !== idx))}
-                    className="p-0.5 rounded text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-0.5 rounded text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                     aria-label="Remove item"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -305,7 +340,7 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
                     }
                   }}
                   placeholder="Add checklist item…"
-                  className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none transition-colors"
                 />
                 <button
                   type="button"
@@ -317,7 +352,7 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
                     }
                   }}
                   disabled={!newChecklistItem.trim()}
-                  className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                   aria-label="Add checklist item"
                 >
                   <Plus className="w-4 h-4" />
@@ -326,29 +361,30 @@ export default function AddTaskModal({ isOpen, onClose, defaultStatus, projects,
             </div>
           </div>
 
+          {error && (
+            <p className="col-span-full text-sm text-rose-600 font-medium bg-rose-50 p-3 rounded-xl border border-rose-100" role="alert">
+              {error}
+            </p>
+          )}
+
           {/* Submit */}
           <div className="pt-4 flex items-center justify-end gap-3 md:col-span-6 border-t border-slate-100 mt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+              className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {loading ? 'Saving…' : 'Add Task'}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Saving…' : 'Add Deliverable'}
             </button>
           </div>
-
-          {error && (
-            <p className="col-span-full text-sm text-rose-600 font-medium bg-rose-50 p-3 rounded-lg border border-rose-100" role="alert">
-              {error}
-            </p>
-          )}
         </form>
       </div>
     </div>

@@ -17,6 +17,7 @@ import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
 import TaskCard from '@/components/tasks/TaskCard';
 import EditMemberModal from '@/components/team/EditMemberModal';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
+import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import { usePagination } from '@/hooks/usePagination';
@@ -46,7 +47,9 @@ export default function TeammateProfilePage() {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
+  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
 
+  const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
   const memberTasks = useMemo(() => activeTasks.filter((t) => t.assigneeId === id), [activeTasks, id]);
@@ -65,11 +68,11 @@ export default function TeammateProfilePage() {
 
   const projectMap = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const project of projects) {
+    for (const project of activeProjects) {
       map[project.id] = project.title;
     }
     return map;
-  }, [projects]);
+  }, [activeProjects]);
 
   const performance: PerformanceData | null = useMemo(() => {
     if (!member) return null;
@@ -344,6 +347,7 @@ export default function TeammateProfilePage() {
                     onStatusChange={handleStatusChange}
                     onEdit={setEditTaskTarget}
                     onDelete={handleRequestDelete}
+                    onPreview={setPreviewTaskTarget}
                   />
                 ))}
               </div>
@@ -363,6 +367,17 @@ export default function TeammateProfilePage() {
             </div>
           )}
       </div>
+
+      <TaskPreviewModal
+        isOpen={!!previewTaskTarget}
+        onClose={() => setPreviewTaskTarget(null)}
+        task={previewTaskTarget}
+        projects={activeProjects}
+        team={team}
+        onEdit={setEditTaskTarget}
+        onDelete={handleRequestDelete}
+        onStatusChange={handleStatusChange}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
@@ -387,7 +402,7 @@ export default function TeammateProfilePage() {
         isOpen={!!editTaskTarget}
         onClose={() => setEditTaskTarget(null)}
         task={editTaskTarget}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onSubmit={handleEditTask}
         loading={false}

@@ -10,6 +10,7 @@ import type { TeamMember, Task, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import TaskCard from '@/components/tasks/TaskCard';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
+import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Calendar, AlertCircle, Clock, CalendarDays } from 'lucide-react';
@@ -31,11 +32,12 @@ export default function DeadlinesPage() {
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
   
-  const { updateDocument } = useUpdateDoc(tasksPath);
+  const { updateDocument, loading: updatingTask } = useUpdateDoc(tasksPath);
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
 
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
+  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
   const [nowTime, setNowTime] = useState<number>(() => new Date('2026-08-28T00:00:00.000Z').getTime());
   const [activeTab, setActiveTab] = React.useState<'overdue' | 'today' | 'week' | 'upcoming'>('overdue');
 
@@ -45,6 +47,7 @@ export default function DeadlinesPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const teamMap = useMemo(() => {
@@ -57,11 +60,11 @@ export default function DeadlinesPage() {
 
   const projectMap = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const project of projects) {
+    for (const project of activeProjects) {
       map[project.id] = project.title;
     }
     return map;
-  }, [projects]);
+  }, [activeProjects]);
 
   const handleStatusChange = useCallback(
     async (taskId: string, newStatus: TaskStatus) => {
@@ -229,6 +232,7 @@ export default function DeadlinesPage() {
               onStatusChange={handleStatusChange}
               onEdit={setEditTaskTarget}
               onDelete={handleRequestDelete}
+              onPreview={setPreviewTaskTarget}
             />
           ))}
         </div>
@@ -331,14 +335,25 @@ export default function DeadlinesPage() {
         loading={deletingTask}
       />
 
+      <TaskPreviewModal
+        isOpen={!!previewTaskTarget}
+        onClose={() => setPreviewTaskTarget(null)}
+        task={previewTaskTarget}
+        projects={activeProjects}
+        team={team}
+        onEdit={setEditTaskTarget}
+        onDelete={handleRequestDelete}
+        onStatusChange={handleStatusChange}
+      />
+
       <EditTaskModal
         isOpen={!!editTaskTarget}
         onClose={() => setEditTaskTarget(null)}
         task={editTaskTarget}
-        projects={projects}
+        projects={activeProjects}
         team={team}
         onSubmit={handleEditTask}
-        loading={false}
+        loading={updatingTask}
       />
     </div>
   );

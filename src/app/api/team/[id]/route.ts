@@ -8,9 +8,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json();
     const existing = await prisma.teamMember.findUnique({ where: { id } });
 
+    const updateData: any = {};
+    if (body.name !== undefined) updateData.name = (body.name || '').trim();
+    if (body.role !== undefined) updateData.role = (body.role || '').trim();
+    if (body.department !== undefined) updateData.department = body.department;
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.manager !== undefined) updateData.manager = body.manager;
+
     const member = await prisma.teamMember.update({
       where: { id },
-      data: body,
+      data: updateData,
     });
 
     logActivity({

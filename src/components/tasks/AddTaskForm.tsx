@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
 import type { TeamMember, Project, NewTaskForm, TaskStatus, SlipCause } from '@/types';
 import { TASK_STATUSES, SLIP_CAUSES, TIME_SLOTS, MAX_TITLE_LENGTH } from '@/types';
 import { sanitizeString } from '@/lib/validation';
@@ -29,40 +29,64 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
     e.preventDefault();
     setError(null);
 
-    if (!projectId) {
-      setError('Please select a project.');
-      return;
-    }
-    if (!assigneeId) {
-      setError('Please select an assignee.');
-      return;
-    }
-    if (!title.trim()) {
-      setError('Please enter a deliverable description.');
-      return;
-    }
+    try {
+      if (!projectId) {
+        setError('Please select a project.');
+        return;
+      }
+      if (!assigneeId) {
+        setError('Please select a team member / assignee.');
+        return;
+      }
+      if (!title.trim()) {
+        setError('Please enter a deliverable description.');
+        return;
+      }
 
-    await onSubmit({
-      projectId,
-      title: sanitizeString(title),
-      assigneeId,
-      startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
-      targetDueDate: targetDueDate ? new Date(targetDueDate).toISOString() : undefined,
-      dueDate: targetDueDate ? new Date(targetDueDate).toISOString() : undefined,
-      targetDueTime,
-      status,
-      slipCause,
-    });
+      let parsedStart: string | undefined;
+      if (startDate) {
+        const parsed = new Date(startDate);
+        if (!isNaN(parsed.getTime())) {
+          parsedStart = parsed.toISOString();
+        }
+      }
+      if (!parsedStart) {
+        parsedStart = new Date().toISOString();
+      }
 
-    setTitle('');
-    setAssigneeId('');
-    setStartDate('');
-    setTargetDueDate('');
-    setTargetDueTime('10:00 PM');
-    setStatus('In Progress');
-    setSlipCause('N/A');
-    setError(null);
-    setOpen(false);
+      let parsedDue: string | undefined;
+      if (targetDueDate) {
+        const parsed = new Date(targetDueDate);
+        if (!isNaN(parsed.getTime())) {
+          parsedDue = parsed.toISOString();
+        }
+      }
+
+      await onSubmit({
+        projectId,
+        title: sanitizeString(title),
+        assigneeId,
+        startDate: parsedStart,
+        targetDueDate: parsedDue,
+        dueDate: parsedDue,
+        targetDueTime,
+        status,
+        slipCause,
+      });
+
+      setTitle('');
+      setAssigneeId('');
+      setStartDate('');
+      setTargetDueDate('');
+      setTargetDueTime('10:00 PM');
+      setStatus('In Progress');
+      setSlipCause('N/A');
+      setError(null);
+      setOpen(false);
+    } catch (err: any) {
+      console.error('Deliverable form submission error:', err);
+      setError(err?.message || 'Failed to save deliverable. Please try again.');
+    }
   };
 
   const handleClose = () => {
@@ -82,7 +106,7 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-800">Log New Deliverable</h3>
@@ -106,12 +130,14 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                     required
                     value={projectId}
                     onChange={(e) => setProjectId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
                   >
                     <option value="">Select Project</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
+                    {projects
+                      .filter((p) => p.status !== 'Archived')
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>{p.title}</option>
+                      ))}
                   </select>
                 </div>
 
@@ -124,7 +150,7 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                     required
                     value={assigneeId}
                     onChange={(e) => setAssigneeId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
                   >
                     <option value="">Select Team Member</option>
                     {team.map((member) => (
@@ -183,7 +209,7 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                   <select
                     value={targetDueTime}
                     onChange={(e) => setTargetDueTime(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
                   >
                     {TIME_SLOTS.map((slot) => (
                       <option key={slot} value={slot}>{slot}</option>
@@ -201,7 +227,7 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
                   >
                     {TASK_STATUSES.map((st) => (
                       <option key={st} value={st}>{st}</option>
@@ -216,7 +242,7 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                   <select
                     value={slipCause}
                     onChange={(e) => setSlipCause(e.target.value as SlipCause)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
                   >
                     {SLIP_CAUSES.map((cause) => (
                       <option key={cause} value={cause}>{cause}</option>
@@ -236,7 +262,7 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -245,7 +271,8 @@ export default function AddTaskForm({ projects, team, onSubmit, loading }: AddTa
                   disabled={loading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? 'Logging...' : 'Save Deliverable'}
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {loading ? 'Saving Deliverable…' : 'Save Deliverable'}
                 </button>
               </div>
             </form>
