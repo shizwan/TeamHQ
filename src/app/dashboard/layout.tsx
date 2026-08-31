@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
 import Sidebar from '@/components/layout/Sidebar';
 import GlobalSearch from '@/components/search/GlobalSearch';
 import ToastContainer from '@/components/ui/Toast';
@@ -10,6 +11,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { isCollapsed } = useSidebar();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -38,8 +40,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row" suppressHydrationWarning>
       <Sidebar />
-      <main className="flex-1 md:ml-64 min-h-screen" suppressHydrationWarning>
-        <div className="p-4 md:p-8 max-w-7xl mx-auto pb-12" suppressHydrationWarning>
+      <main
+        className={`flex-1 transition-all duration-300 ease-in-out min-h-screen ${
+          isCollapsed ? 'md:ml-20' : 'md:ml-64'
+        }`}
+        suppressHydrationWarning
+      >
+        <div className="w-full p-4 sm:p-6 lg:p-8 pb-16" suppressHydrationWarning>
           <GlobalSearch />
           {children}
         </div>
@@ -54,5 +61,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardShell>{children}</DashboardShell>;
+  return (
+    <SidebarProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </SidebarProvider>
+  );
 }

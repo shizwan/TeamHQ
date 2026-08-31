@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -51,6 +51,7 @@ model Task {
   slipCause       String?   @default("N/A") // 'N/A' | 'Developer' | 'Dependency' | 'Scope Drift' | 'Environment/QA' | 'Unplanned Task'
   startDate       DateTime?
   targetDueDate   DateTime?
+  dueDate         DateTime?
   targetDueTime   String?   @default("10:00 PM") // ETA (01:00 PM to 10:00 PM)
   completedDate   DateTime?
   completedTime   String?   // 01:00 PM to 10:00 PM
@@ -66,5 +67,19 @@ model Task {
 
   project  Project    @relation("ProjectTasks", fields: [projectId], references: [id], onDelete: Cascade)
   assignee TeamMember @relation("TeamMemberTasks", fields: [assigneeId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String   @default("admin-user")
+  actorName   String   @default("Shizwan")
+  actorEmail  String?  @default("shizwan@teamhq.io")
+  action      String   // 'created' | 'updated' | 'status_changed' | 'completed' | 'deleted' | 'archived' | 'unarchived'
+  entityType  String   // 'task' | 'project' | 'team_member' | 'system'
+  entityId    String?
+  entityTitle String
+  details     String?
+  metadata    String?  // JSON string
+  createdAt   DateTime @default(now())
 }
 

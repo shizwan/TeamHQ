@@ -7,6 +7,7 @@ import {
   calculateOnTimeStatus, 
   calculateLifecycleStatus 
 } from '@/lib/trackerEngine';
+import { logActivity } from '@/lib/activityLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,18 @@ export async function POST(req: Request) {
         completedAt: status === 'Completed' ? (completedDate || new Date()) : null,
       }
     });
+
+    // Log activity
+    logActivity({
+      userId: body.userId || 'admin-user',
+      action: 'created',
+      entityType: 'task',
+      entityId: task.id,
+      entityTitle: task.title,
+      details: `Created deliverable [${task.deliverableId || 'DLV'}] "${task.title}".`,
+      metadata: { deliverableId: task.deliverableId, status: task.status },
+    }).catch((err) => console.error('Activity log error:', err));
+
     return NextResponse.json(task);
   } catch (error) {
     console.error('Task creation error:', error);

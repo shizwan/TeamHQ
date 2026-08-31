@@ -6,6 +6,7 @@ import {
   calculateOnTimeStatus, 
   calculateLifecycleStatus 
 } from '@/lib/trackerEngine';
+import { logActivity } from '@/lib/activityLogger';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -67,6 +68,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       where: { id },
       data: updateData,
     });
+
+    // Determine activity action
+    const isStatusChange = body.status && body.status !== existing.status;
+    const action = isStatusChange ? (body.status === 'Completed' ? 'completed' : 'status_changed') : 'updated';
+    const details = isStatusChange
+      ? `Changed status of [${task.deliverableId || 'DLV'}] from "${existing.status}" to "${task.status}".`
+      : `Updated details for [${task.deliverableId || 'DLV'}] "${task.title}".`;
+
+    logActivity({
+      userId: task.userId,
+      action,
+      entityType: 'task',
+      entityId: task.id,
+      entityTitle: task.title,
+      details,
+      metadata: {
+        deliverableId: task.deliverableId,
+        prevStatus: existing.status,
+        newStatus: task.status,
+        slipCause: task.slipCause,
+      },
+    }).catch((err) => console.error('Activity log error:', err));
+
     return NextResponse.json(task);
   } catch (error) {
     console.error("PATCH Task Error:", error);
@@ -77,9 +101,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const existing = await prisma.task.findUnique({ where: { id } });
+
     await prisma.task.delete({
       where: { id },
     });
+
+    if (existing) {
+      logActivity({
+        userId: existing.userId,
+        action: 'deleted',
+        entityType: 'task',
+        entityId: existing.id,
+        entityTitle: existing.title,
+        details: `Deleted deliverable [${existing.deliverableId || 'DLV'}] "${existing.title}".`,
+        metadata: { deliverableId: existing.deliverableId },
+      }).catch((err) => console.error('Activity log error:', err));
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE Task Error:", error);

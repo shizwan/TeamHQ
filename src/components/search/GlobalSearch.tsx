@@ -112,6 +112,16 @@ const STATIC_PAGES: SearchResultItem[] = [
     href: '/dashboard/reports',
     iconType: 'page',
   },
+  {
+    id: 'page-activity',
+    category: 'pages',
+    title: 'Activity Logs & Audit Trail',
+    subtitle: 'Real-time operational event timeline and modification history',
+    badge: 'Audit',
+    badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200/60',
+    href: '/dashboard/activity',
+    iconType: 'page',
+  },
 ];
 
 export default function GlobalSearch() {

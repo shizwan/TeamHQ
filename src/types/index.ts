@@ -233,8 +233,35 @@ export const PIE_COLORS: Record<string, string> = {
   'Pending': '#94a3b8',
 };
 
+// ─── Activity Log ───────────────────────────────────────────────
+export type ActivityAction = 
+  | 'created' 
+  | 'updated' 
+  | 'status_changed' 
+  | 'completed' 
+  | 'deleted' 
+  | 'archived' 
+  | 'unarchived';
+
+export type ActivityEntityType = 'task' | 'project' | 'team_member' | 'system';
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  actorName: string;
+  actorEmail?: string | null;
+  action: ActivityAction | string;
+  entityType: ActivityEntityType | string;
+  entityId?: string | null;
+  entityTitle: string;
+  details?: string | null;
+  metadata?: string | null; // JSON string
+  createdAt: string;
+}
+
 // ─── Constants ──────────────────────────────────────────────────
 export const MAX_NAME_LENGTH = 100;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_ROLE_LENGTH = 80;
 export const MAX_DEPARTMENT_LENGTH = 80;
+
