@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
-import { filterActiveTasks } from '@/lib/trackerEngine';
+import { filterActiveTasks, parseDateWithTime } from '@/lib/trackerEngine';
 import type { TeamMember, Task, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import TaskCard from '@/components/tasks/TaskCard';
@@ -38,7 +38,7 @@ export default function DeadlinesPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
-  const [nowTime, setNowTime] = useState<number>(() => new Date('2026-08-28T00:00:00.000Z').getTime());
+  const [nowTime, setNowTime] = useState<number>(() => Date.now());
   const [activeTab, setActiveTab] = React.useState<'overdue' | 'today' | 'week' | 'upcoming'>('overdue');
 
   useEffect(() => {
@@ -70,14 +70,7 @@ export default function DeadlinesPage() {
     async (taskId: string, newStatus: TaskStatus) => {
       const updateData: Partial<Task> = {
         status: newStatus,
-        updatedAt: new Date().toISOString(),
       };
-      
-      if (newStatus === 'Completed') {
-        updateData.completedAt = new Date().toISOString();
-      } else {
-        updateData.completedAt = null;
-      }
 
       const success = await updateDocument(taskId, updateData);
 
@@ -142,19 +135,19 @@ export default function DeadlinesPage() {
     const todayTime = todayEnd.getTime();
     const weekTime = weekEnd.getTime();
 
-    const activeTasksList = activeTasks.filter(t => t.status !== 'Completed').sort(
+    const activeTasksList = activeTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').sort(
       (a, b) => {
-        const dateA = a.targetDueDate || a.dueDate ? new Date(a.targetDueDate || a.dueDate!).getTime() : 0;
-        const dateB = b.targetDueDate || b.dueDate ? new Date(b.targetDueDate || b.dueDate!).getTime() : 0;
+        const dateA = parseDateWithTime(a.targetDueDate || a.dueDate, a.targetDueTime)?.getTime() || 0;
+        const dateB = parseDateWithTime(b.targetDueDate || b.dueDate, b.targetDueTime)?.getTime() || 0;
         return dateA - dateB;
       }
     );
 
     activeTasksList.forEach((task) => {
-      const taskDueDate = task.targetDueDate || task.dueDate;
-      const taskTime = taskDueDate ? new Date(taskDueDate).getTime() : 0;
+      const targetDate = parseDateWithTime(task.targetDueDate || task.dueDate, task.targetDueTime || '10:00 PM');
+      const taskTime = targetDate ? targetDate.getTime() : 0;
       
-      if (task.status === 'Overdue' || taskTime < nowTime) {
+      if ((task.delayHours ?? 0) > 0 || (taskTime > 0 && taskTime < nowTime)) {
         overdue.push(task);
       } else if (taskTime <= todayTime) {
         dueToday.push(task);
@@ -210,7 +203,7 @@ export default function DeadlinesPage() {
       return (
         <div className="mb-10">
           <div className="p-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
-            <div className={`p-4 rounded-full bg-slate-100 mb-4`}>
+            <div className="p-4 rounded-full bg-slate-100 mb-4">
               {icon}
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-1">All clear</h3>
@@ -274,7 +267,7 @@ export default function DeadlinesPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as TabType)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${
                 isActive 
                   ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200/50' 
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'

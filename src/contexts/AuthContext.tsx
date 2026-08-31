@@ -1,59 +1,96 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
-// Dummy user for now until NextAuth is set up
-const dummyUser = {
-  uid: 'admin-user',
-  email: 'admin@teamhq.com',
-  displayName: 'Admin User',
-};
+export interface AuthUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
 
 interface AuthContextValue {
-  user: any;
+  user: AuthUser | null;
   loading: boolean;
   signInWithEmail: (e: string, p: string) => Promise<void>;
   signOut: () => Promise<void>;
   error: string | null;
   clearError: () => void;
+  checkSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const clearError = () => setError(null);
+  const clearError = useCallback(() => setError(null), []);
 
-  useEffect(() => {
-    // Simulate auth check
-    const checkAuth = () => {
-      const isAuth = localStorage.getItem('auth_token');
-      if (isAuth) setUser(dummyUser);
+  const checkSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user || null);
+      } else {
+        setUser(null);
+      }
+    } catch (err) {
+      setUser(null);
+    } finally {
       setLoading(false);
-    };
-    checkAuth();
+    }
   }, []);
 
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
   const signInWithEmail = async (email: string, pass: string) => {
-    if (email === 'admin@teamhq.com' && pass === 'password') {
-      localStorage.setItem('auth_token', 'true');
-      setUser(dummyUser);
-    } else {
-      setError('Invalid email or password');
-      throw new Error('Invalid email or password');
+    clearError();
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errMsg = data.error || 'Authentication failed.';
+        setError(errMsg);
+        throw new Error(errMsg);
+      }
+
+      setUser(data.user);
+    } catch (err: any) {
+      const errMsg = err.message || 'Invalid email or password.';
+      setError(errMsg);
+      throw err;
     }
   };
 
   const signOut = async () => {
-    localStorage.removeItem('auth_token');
-    setUser(null);
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+    } catch (e) {
+      console.error('Logout error:', e);
+    } finally {
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithEmail, signOut, error, clearError }}>
+    <AuthContext.Provider value={{ user, loading, signInWithEmail, signOut, error, clearError, checkSession }}>
       {children}
     </AuthContext.Provider>
   );

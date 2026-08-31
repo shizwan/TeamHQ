@@ -230,7 +230,13 @@ export default function TeammateProfilePage() {
             {(() => {
               const delayedTasks = memberTasks.map(t => ({ 
                 task: t, 
-                delay: calculateTaskDelay({ dueDate: t.targetDueDate || t.dueDate || '', completedAt: t.completedAt, status: t.status }) 
+                delay: calculateTaskDelay({ 
+                  targetDueDate: t.targetDueDate || t.dueDate, 
+                  targetDueTime: t.targetDueTime,
+                  completedDate: t.completedDate || t.completedAt, 
+                  completedTime: t.completedTime,
+                  status: t.status 
+                }) 
               })).filter(x => x.delay.isDelayed);
               
               if (delayedTasks.length === 0) {

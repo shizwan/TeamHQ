@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activityLogger';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorizedResponse();
+
   try {
     const projects = await prisma.project.findMany({
       orderBy: { createdAt: 'desc' }
@@ -16,6 +20,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorizedResponse();
+
   try {
     const body = await req.json();
 
@@ -29,7 +36,7 @@ export async function POST(req: Request) {
 
     const project = await prisma.project.create({
       data: {
-        userId: body.userId || 'admin-user',
+        userId: auth.user.uid,
         title,
         description: body.description || '',
         priority: body.priority || 'High',
@@ -41,7 +48,9 @@ export async function POST(req: Request) {
     });
 
     logActivity({
-      userId: project.userId,
+      userId: auth.user.uid,
+      actorName: auth.user.displayName,
+      actorEmail: auth.user.email,
       action: 'created',
       entityType: 'project',
       entityId: project.id,

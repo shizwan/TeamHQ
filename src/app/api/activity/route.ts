@@ -1,34 +1,46 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { seedInitialActivityLogs, logActivity } from '@/lib/activityLogger';
+import { logActivity } from '@/lib/activityLogger';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  // 1. Enforce server-side authentication
+  const auth = await requireAuth(req);
+  if (!auth) {
+    return unauthorizedResponse();
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const entityType = searchParams.get('entityType');
     const action = searchParams.get('action');
-    const search = searchParams.get('search');
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 100;
+    const search = searchParams.get('search')?.trim();
+    const limit = searchParams.get('limit') ? Math.min(Math.max(parseInt(searchParams.get('limit')!, 10), 1), 500) : 200;
 
-    const count = await prisma.activityLog.count();
-    if (count === 0) {
-      await seedInitialActivityLogs();
-    }
+    // 2. Scope strictly to the authenticated user/tenant
+    const where: any = {
+      userId: auth.user.uid,
+    };
 
-    const where: any = {};
     if (entityType && entityType !== 'all') {
       where.entityType = entityType;
     }
     if (action && action !== 'all') {
       where.action = action;
     }
+
+    // 3. Use structured AND condition for search to avoid overriding tenant/filter constraints
     if (search) {
-      where.OR = [
-        { entityTitle: { contains: search } },
-        { details: { contains: search } },
-        { actorName: { contains: search } },
+      where.AND = [
+        {
+          OR: [
+            { entityTitle: { contains: search } },
+            { details: { contains: search } },
+            { actorName: { contains: search } },
+          ],
+        },
       ];
     }
 
@@ -46,9 +58,21 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // 1. Enforce server-side authentication
+  const auth = await requireAuth(req);
+  if (!auth) {
+    return unauthorizedResponse();
+  }
+
   try {
     const body = await req.json();
-    const log = await logActivity(body);
+    const log = await logActivity({
+      ...body,
+      userId: auth.user.uid,
+      actorName: auth.user.displayName,
+      actorEmail: auth.user.email,
+    });
+
     if (!log) {
       return NextResponse.json({ error: 'Failed to create activity log' }, { status: 500 });
     }
@@ -58,11 +82,35 @@ export async function POST(req: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  // 1. Enforce server-side authentication
+  const auth = await requireAuth(req);
+  if (!auth) {
+    return unauthorizedResponse();
+  }
+
   try {
-    await prisma.activityLog.deleteMany({});
-    return NextResponse.json({ success: true, message: 'All activity logs cleared' });
+    // 2. Delete ONLY records belonging to the authenticated user/tenant
+    await prisma.activityLog.deleteMany({
+      where: {
+        userId: auth.user.uid,
+      },
+    });
+
+    // 3. Record an audit milestone for the log purge
+    await logActivity({
+      userId: auth.user.uid,
+      actorName: auth.user.displayName,
+      actorEmail: auth.user.email,
+      action: 'deleted',
+      entityType: 'system',
+      entityTitle: 'Audit Log Purge',
+      details: `Activity audit trail cleared by ${auth.user.displayName} (${auth.user.email}).`,
+    });
+
+    return NextResponse.json({ success: true, message: 'All activity logs cleared successfully.' });
   } catch (error) {
+    console.error('Failed to clear activity logs:', error);
     return NextResponse.json({ error: 'Failed to clear activity logs' }, { status: 500 });
   }
 }

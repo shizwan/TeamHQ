@@ -4,11 +4,16 @@ import {
   calculateDaysActive, 
   calculateDelayHours, 
   calculateOnTimeStatus, 
-  calculateLifecycleStatus 
+  calculateLifecycleStatus,
+  formatTimeString
 } from '@/lib/trackerEngine';
 import { logActivity } from '@/lib/activityLogger';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorizedResponse();
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -21,18 +26,35 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const status = body.status !== undefined ? body.status : existing.status;
     const slipCause = body.slipCause !== undefined ? body.slipCause : existing.slipCause;
-    const startDate = body.startDate !== undefined ? (body.startDate ? new Date(body.startDate) : null) : existing.startDate;
-    const targetDueDate = body.targetDueDate !== undefined ? (body.targetDueDate ? new Date(body.targetDueDate) : null) : (body.dueDate !== undefined ? (body.dueDate ? new Date(body.dueDate) : null) : existing.targetDueDate);
+    const startDate = body.startDate !== undefined 
+      ? (body.startDate ? new Date(body.startDate) : null) 
+      : existing.startDate;
+    
+    const targetDueDate = body.targetDueDate !== undefined 
+      ? (body.targetDueDate ? new Date(body.targetDueDate) : null) 
+      : (body.dueDate !== undefined ? (body.dueDate ? new Date(body.dueDate) : null) : existing.targetDueDate);
+    
     const targetTime = body.targetDueTime !== undefined ? body.targetDueTime : existing.targetDueTime;
     
-    let completedDate = body.completedDate !== undefined ? (body.completedDate ? new Date(body.completedDate) : null) : existing.completedDate;
-    if (status === 'Completed' && !completedDate) {
-      completedDate = new Date();
-    } else if (status !== 'Completed' && body.completedDate === undefined) {
-      completedDate = null;
-    }
+    let completedDate: Date | null = null;
+    let compTime: string | null = null;
 
-    const compTime = body.completedTime !== undefined ? body.completedTime : existing.completedTime;
+    if (status === 'Completed') {
+      completedDate = body.completedDate !== undefined 
+        ? (body.completedDate ? new Date(body.completedDate) : new Date()) 
+        : (existing.completedDate || new Date());
+
+      compTime = body.completedTime !== undefined
+        ? body.completedTime
+        : (existing.completedTime || formatTimeString(completedDate));
+    } else {
+      // If moving away from completed, clear completion date
+      completedDate = body.completedDate !== undefined 
+        ? (body.completedDate ? new Date(body.completedDate) : null) 
+        : (existing.status === 'Completed' ? null : existing.completedDate);
+      
+      compTime = body.completedTime !== undefined ? body.completedTime : (existing.status === 'Completed' ? null : existing.completedTime);
+    }
 
     const daysActive = calculateDaysActive(startDate, completedDate);
     const delayHours = calculateDelayHours(targetDueDate, targetTime, completedDate, compTime, status);
@@ -53,6 +75,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       onTimeStatus,
       lifecycleStatus,
       completedAt: status === 'Completed' ? (completedDate || new Date()) : null,
+      updatedAt: new Date(),
     };
 
     delete updateData.dueDate;
@@ -77,7 +100,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       : `Updated details for [${task.deliverableId || 'DLV'}] "${task.title}".`;
 
     logActivity({
-      userId: task.userId,
+      userId: auth.user.uid,
+      actorName: auth.user.displayName,
+      actorEmail: auth.user.email,
       action,
       entityType: 'task',
       entityId: task.id,
@@ -99,25 +124,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorizedResponse();
+
   try {
     const { id } = await params;
     const existing = await prisma.task.findUnique({ where: { id } });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
 
     await prisma.task.delete({
       where: { id },
     });
 
-    if (existing) {
-      logActivity({
-        userId: existing.userId,
-        action: 'deleted',
-        entityType: 'task',
-        entityId: existing.id,
-        entityTitle: existing.title,
-        details: `Deleted deliverable [${existing.deliverableId || 'DLV'}] "${existing.title}".`,
-        metadata: { deliverableId: existing.deliverableId },
-      }).catch((err) => console.error('Activity log error:', err));
-    }
+    logActivity({
+      userId: auth.user.uid,
+      actorName: auth.user.displayName,
+      actorEmail: auth.user.email,
+      action: 'deleted',
+      entityType: 'task',
+      entityId: existing.id,
+      entityTitle: existing.title,
+      details: `Deleted deliverable [${existing.deliverableId || 'DLV'}] "${existing.title}".`,
+      metadata: { deliverableId: existing.deliverableId },
+    }).catch((err) => console.error('Activity log error:', err));
 
     return NextResponse.json({ success: true });
   } catch (error) {

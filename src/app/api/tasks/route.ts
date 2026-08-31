@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { 
-  generateDeliverableId, 
+  generateNextDeliverableId, 
   calculateDaysActive, 
   calculateDelayHours, 
   calculateOnTimeStatus, 
-  calculateLifecycleStatus 
+  calculateLifecycleStatus,
+  formatTimeString
 } from '@/lib/trackerEngine';
 import { logActivity } from '@/lib/activityLogger';
+import { requireAuth, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorizedResponse();
+
   try {
     const tasks = await prisma.task.findMany({
       orderBy: { createdAt: 'desc' }
@@ -23,6 +28,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorizedResponse();
+
   try {
     const body = await req.json();
 
@@ -53,20 +61,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Selected team member does not exist' }, { status: 400 });
     }
 
-    // Auto-generate deliverable ID if not provided
+    // Auto-generate strictly monotonic deliverable ID if not provided
     if (!body.deliverableId) {
-      const count = await prisma.task.count();
-      body.deliverableId = generateDeliverableId(count + 1);
+      const existingTasks = await prisma.task.findMany({
+        select: { deliverableId: true }
+      });
+      body.deliverableId = generateNextDeliverableId(existingTasks.map((t) => t.deliverableId));
     }
 
     const startDate = body.startDate ? new Date(body.startDate) : new Date();
-    const targetDueDate = body.targetDueDate || body.dueDate ? new Date(body.targetDueDate || body.dueDate) : null;
-    const completedDate = body.completedDate ? new Date(body.completedDate) : (body.status === 'Completed' ? new Date() : null);
+    const rawTarget = body.targetDueDate || body.dueDate;
+    const targetDueDate = rawTarget ? new Date(rawTarget) : null;
     
-    const targetTime = body.targetDueTime || '10:00 PM';
-    const compTime = body.completedTime || '10:00 PM';
     const status = body.status || 'In Progress';
     const slipCause = body.slipCause || 'N/A';
+    const targetTime = body.targetDueTime || '10:00 PM';
+
+    let completedDate: Date | null = null;
+    let compTime: string | null = null;
+
+    if (status === 'Completed') {
+      completedDate = body.completedDate ? new Date(body.completedDate) : new Date();
+      compTime = body.completedTime || formatTimeString(completedDate);
+    } else {
+      completedDate = body.completedDate ? new Date(body.completedDate) : null;
+      compTime = body.completedTime || '10:00 PM';
+    }
 
     const daysActive = calculateDaysActive(startDate, completedDate);
     const delayHours = calculateDelayHours(targetDueDate, targetTime, completedDate, compTime, status);
@@ -74,7 +94,7 @@ export async function POST(req: Request) {
     const lifecycleStatus = calculateLifecycleStatus(status, onTimeStatus, slipCause, delayHours);
 
     const taskData: any = {
-      userId: body.userId || 'admin-user',
+      userId: auth.user.uid,
       deliverableId: body.deliverableId,
       projectId: body.projectId,
       assigneeId: body.assigneeId,
@@ -104,7 +124,9 @@ export async function POST(req: Request) {
 
     // Log activity
     logActivity({
-      userId: body.userId || 'admin-user',
+      userId: auth.user.uid,
+      actorName: auth.user.displayName,
+      actorEmail: auth.user.email,
       action: 'created',
       entityType: 'task',
       entityId: task.id,

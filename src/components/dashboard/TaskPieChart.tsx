@@ -24,71 +24,87 @@ interface PieEntry {
 }
 
 const STATUS_COLOR_MAP: Record<string, string> = {
-  'In Progress': PIE_COLORS['In Progress'],
-  'Completed': PIE_COLORS['Completed'],
-  'Overdue': PIE_COLORS['Overdue'],
-  'Pending': PIE_COLORS['Pending'],
+  'Completed': PIE_COLORS['Completed'] || '#10b981',
+  'In Progress': PIE_COLORS['In Progress'] || '#3b82f6',
+  'Carried Forward': PIE_COLORS['Carried Forward'] || '#f59e0b',
+  'Blocked': PIE_COLORS['Blocked'] || '#ef4444',
+  'Cancelled': PIE_COLORS['Cancelled'] || '#64748b',
+  'Pending': PIE_COLORS['Pending'] || '#94a3b8',
 };
 
 export default function TaskPieChart({ metrics }: TaskPieChartProps) {
   const rawData: PieEntry[] = [
-    { name: 'In Progress', value: metrics.inProgress },
     { name: 'Completed', value: metrics.completed },
-    { name: 'Overdue', value: metrics.overdue },
-    { name: 'Pending', value: metrics.pending },
-  ];
+    { name: 'In Progress', value: metrics.inProgress },
+    { name: 'Carried Forward', value: metrics.carriedForward },
+    { name: 'Blocked', value: metrics.blocked },
+    { name: 'Cancelled', value: metrics.cancelled },
+  ].filter((entry) => entry.value > 0);
 
-  const allZero = rawData.every((entry) => entry.value === 0);
-  const pieData = rawData;
+  if (metrics.pending > 0) {
+    rawData.push({ name: 'Pending', value: metrics.pending });
+  }
+
+  const allZero = rawData.length === 0;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">
-        Task Distribution
-      </h3>
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <PieChartIcon className="w-5 h-5 text-indigo-600" />
+          Deliverables Status Distribution
+        </h3>
+        <span className="text-xs font-semibold text-slate-400">Total: {metrics.total} Deliverables</span>
+      </div>
 
       {allZero ? (
         <EmptyState
-          icon={<PieChartIcon className="h-12 w-12" />}
-          title="No tasks yet"
-          description="Create tasks to see their status distribution here."
+          icon={<PieChartIcon className="h-12 w-12 text-slate-400" />}
+          title="No deliverables yet"
+          description="Create deliverables to see their status distribution here."
         />
       ) : (
-        <div className="h-80" role="img" aria-label="Task status distribution pie chart">
+        <div className="h-80 w-full" role="img" aria-label="Deliverable status distribution pie chart">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={pieData}
+                data={rawData}
                 cx="50%"
                 cy="50%"
-                innerRadius={80}
-                outerRadius={120}
-                paddingAngle={5}
+                innerRadius={65}
+                outerRadius={105}
+                paddingAngle={3}
                 dataKey="value"
                 nameKey="name"
               >
-                {pieData.map((entry) => (
+                {rawData.map((entry) => (
                   <Cell
                     key={entry.name}
                     fill={STATUS_COLOR_MAP[entry.name] ?? '#94a3b8'}
-                    stroke="none"
+                    stroke="#ffffff"
+                    strokeWidth={2}
                   />
                 ))}
               </Pie>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: 'none',
-                  borderRadius: '0.5rem',
-                  color: '#f1f5f9',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: '0.75rem',
+                  color: '#f8fafc',
                   fontSize: '0.875rem',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                 }}
-                itemStyle={{ color: '#f1f5f9' }}
+                itemStyle={{ color: '#f8fafc', padding: '2px 0' }}
+                formatter={(value: any, name: any) => [
+                  `${value} (${Math.round((Number(value) / (metrics.total || 1)) * 100)}%)`,
+                  name,
+                ]}
               />
               <Legend
                 verticalAlign="bottom"
                 iconType="circle"
-                wrapperStyle={{ fontSize: '0.875rem', color: '#64748b' }}
+                wrapperStyle={{ fontSize: '0.8125rem', color: '#475569', paddingTop: '1rem' }}
               />
             </PieChart>
           </ResponsiveContainer>

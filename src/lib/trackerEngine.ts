@@ -10,13 +10,123 @@ import type {
   TaskMetrics
 } from '@/types';
 
-// Format deliverable ID like DLV-000001
+/**
+ * Generates a formatted Deliverable ID (e.g. DLV-000001)
+ */
 export function generateDeliverableId(num: number): string {
-  return `DLV-${String(num).padStart(6, '0')}`;
+  return `DLV-${String(Math.max(1, num)).padStart(6, '0')}`;
 }
 
-// Calculate days active
-export function calculateDaysActive(startDateStr?: string | Date | null, completedDateStr?: string | Date | null): number {
+/**
+ * Extracts highest integer ID from an array of existing deliverable IDs
+ * and returns the next strictly unique, monotonic Deliverable ID.
+ */
+export function generateNextDeliverableId(existingIds: (string | null | undefined)[]): string {
+  let maxId = 0;
+  for (const id of existingIds) {
+    if (!id) continue;
+    const match = id.match(/DLV-(\d+)/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxId) {
+        maxId = num;
+      }
+    }
+  }
+  return generateDeliverableId(maxId + 1);
+}
+
+/**
+ * Timezone-agnostic helper to parse time strings like "10:00 PM" or "22:00" into hours & minutes
+ */
+export function parseTimeString(timeStr?: string | null): { hours: number; minutes: number; decimalHours: number } {
+  if (!timeStr) return { hours: 22, minutes: 0, decimalHours: 22 }; // default 10:00 PM
+
+  // 12-hour format with AM/PM (e.g., "10:00 PM", "07:30 AM")
+  const match12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match12) {
+    let hours = parseInt(match12[1], 10);
+    const minutes = parseInt(match12[2], 10);
+    const period = match12[3].toUpperCase();
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    return { hours, minutes, decimalHours: hours + minutes / 60 };
+  }
+
+  // 24-hour format (e.g., "17:00", "09:30")
+  const match24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (match24) {
+    const hours = parseInt(match24[1], 10);
+    const minutes = parseInt(match24[2], 10);
+    return { hours, minutes, decimalHours: hours + minutes / 60 };
+  }
+
+  return { hours: 22, minutes: 0, decimalHours: 22 };
+}
+
+/**
+ * Format Date to 12-hour time string "hh:mm A" (e.g. "03:45 PM")
+ */
+export function formatTimeString(dateInput?: string | Date | null): string {
+  if (!dateInput) return '10:00 PM';
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return '10:00 PM';
+  let hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const minutesStr = minutes < 10 ? '0' + minutes : String(minutes);
+  const hoursStr = hours < 10 ? '0' + hours : String(hours);
+  return `${hoursStr}:${minutesStr} ${ampm}`;
+}
+
+/**
+ * Parses date input and target time slot into a precise, timezone-consistent Date object.
+ * Prevents UTC-midnight date shifting.
+ */
+export function parseDateWithTime(
+  dateInput?: string | Date | null,
+  timeStr?: string | null
+): Date | null {
+  if (!dateInput) return null;
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (typeof dateInput === 'string') {
+    // Check if ISO format YYYY-MM-DD
+    const dateMatch = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateMatch) {
+      year = parseInt(dateMatch[1], 10);
+      month = parseInt(dateMatch[2], 10) - 1;
+      day = parseInt(dateMatch[3], 10);
+    } else {
+      const parsed = new Date(dateInput);
+      if (isNaN(parsed.getTime())) return null;
+      year = parsed.getFullYear();
+      month = parsed.getMonth();
+      day = parsed.getDate();
+    }
+  } else {
+    if (isNaN(dateInput.getTime())) return null;
+    year = dateInput.getFullYear();
+    month = dateInput.getMonth();
+    day = dateInput.getDate();
+  }
+
+  const { hours, minutes } = parseTimeString(timeStr || '10:00 PM');
+  return new Date(year, month, day, hours, minutes, 0, 0);
+}
+
+/**
+ * Calculate days active between start and completion/current date
+ */
+export function calculateDaysActive(
+  startDateStr?: string | Date | null, 
+  completedDateStr?: string | Date | null
+): number {
   if (!startDateStr) return 1;
   const start = new Date(startDateStr).getTime();
   const end = completedDateStr ? new Date(completedDateStr).getTime() : Date.now();
@@ -25,34 +135,25 @@ export function calculateDaysActive(startDateStr?: string | Date | null, complet
   return Math.max(1, diffDays);
 }
 
-// Filter out tasks belonging to Archived projects or marked as Archived
+/**
+ * Filter out tasks belonging to Archived projects or marked as Archived
+ */
 export function filterActiveTasks(tasks: Task[], projects: Project[] = []): Task[] {
-  if (!tasks) return [];
+  if (!tasks || !Array.isArray(tasks)) return [];
   if (!projects || projects.length === 0) {
-    return tasks.filter((t) => t.status !== 'Archived');
+    return tasks.filter((t) => t && t.status !== 'Archived');
   }
   const archivedProjectIds = new Set(
     projects.filter((p) => p.status === 'Archived').map((p) => p.id)
   );
   return tasks.filter(
-    (t) => !archivedProjectIds.has(t.projectId) && t.status !== 'Archived'
+    (t) => t && !archivedProjectIds.has(t.projectId) && t.status !== 'Archived'
   );
 }
 
-// Helper to parse time string like "10:00 PM" into hours (24h)
-function parseTimeString(timeStr?: string | null): number {
-  if (!timeStr) return 22; // default 10:00 PM
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return 22;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const period = match[3].toUpperCase();
-  if (period === 'PM' && hours < 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
-  return hours + minutes / 60;
-}
-
-// Calculate delay in hours past target ETA
+/**
+ * Calculate delay in hours past target ETA
+ */
 export function calculateDelayHours(
   targetDateStr?: string | Date | null,
   targetTimeStr?: string | null,
@@ -61,20 +162,16 @@ export function calculateDelayHours(
   status?: string
 ): number {
   if (!targetDateStr) return 0;
-  const targetDate = new Date(targetDateStr);
-  const targetHour = parseTimeString(targetTimeStr || '10:00 PM');
-  targetDate.setHours(Math.floor(targetHour), (targetHour % 1) * 60, 0, 0);
-
-  const actualDate = completedDateStr ? new Date(completedDateStr) : new Date();
-  if (completedDateStr) {
-    const actualHour = parseTimeString(completedTimeStr || '10:00 PM');
-    actualDate.setHours(Math.floor(actualHour), (actualHour % 1) * 60, 0, 0);
-  }
+  const targetDate = parseDateWithTime(targetDateStr, targetTimeStr || '10:00 PM');
+  if (!targetDate) return 0;
 
   if (status === 'Completed' || status === 'Cancelled') {
     if (completedDateStr) {
-      const diffMs = actualDate.getTime() - targetDate.getTime();
-      return diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0;
+      const actualDate = parseDateWithTime(completedDateStr, completedTimeStr || '10:00 PM');
+      if (actualDate) {
+        const diffMs = actualDate.getTime() - targetDate.getTime();
+        return diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0;
+      }
     }
     return 0;
   }
@@ -83,7 +180,9 @@ export function calculateDelayHours(
   return diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0;
 }
 
-// Calculate On-Time evaluation status
+/**
+ * Calculate On-Time evaluation status
+ */
 export function calculateOnTimeStatus(
   status: string,
   targetDateStr?: string | Date | null,
@@ -104,7 +203,9 @@ export function calculateOnTimeStatus(
   return delayHrs > 0 ? 'No' : 'Pending';
 }
 
-// Calculate Lifecycle Status Badge
+/**
+ * Calculate Lifecycle Status Badge
+ */
 export function calculateLifecycleStatus(
   status: string,
   onTimeStatus: OnTimeStatus,
@@ -128,11 +229,15 @@ export function calculateLifecycleStatus(
   return '🟢 Not Yet Due';
 }
 
-// Compute metrics for Team Performance Matrix
+/**
+ * Compute metrics for Team Performance Matrix
+ */
 export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): PerformanceData[] {
   return team.map((member) => {
     const memberTasks = tasks.filter((t) => t.assigneeId === member.id);
-    const activeTasks = memberTasks.filter((t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked').length;
+    const activeTasks = memberTasks.filter(
+      (t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked'
+    ).length;
     const completedTasks = memberTasks.filter((t) => t.status === 'Completed').length;
     
     // On-Time completed tasks
@@ -140,17 +245,29 @@ export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): Per
       (t) => t.status === 'Completed' && (t.onTimeStatus === 'Yes' || (t.delayHours ?? 0) <= 0)
     ).length;
 
-    const onTimeRate = completedTasks > 0 ? Number((onTimeCompleted / completedTasks).toFixed(2)) : (activeTasks > 0 ? 0 : 1);
+    // If a member has completed tasks, calculate on-time rate.
+    // If they have no completed tasks but have active tasks and zero slips, they are in good standing (1.0 rate).
+    const onTimeRate = completedTasks > 0 
+      ? Number((onTimeCompleted / completedTasks).toFixed(2)) 
+      : 1.0;
+
     const carriedForward = memberTasks.filter((t) => t.status === 'Carried Forward').length;
     const slipsLogged = memberTasks.filter((t) => t.slipCause && t.slipCause !== 'N/A').length;
 
+    // Performance Rating Rule Reconciliation:
+    // - Standby: 0 deliverables assigned
+    // - Action Required: Any slips logged, any carried forward, or on-time completion rate < 60% with completed work
+    // - Top Performer: >= 80% on-time completion rate with at least 2 completed deliverables and zero slips
+    // - Satisfactory: Normal active progress with clean track record
     let performanceRating: '🔴 Action Required' | '⚪ Standby' | '🟢 Top Performer' | '🟡 Satisfactory' = '🟡 Satisfactory';
     if (memberTasks.length === 0) {
       performanceRating = '⚪ Standby';
-    } else if (slipsLogged > 1 || onTimeRate < 0.6 || carriedForward > 0) {
+    } else if (slipsLogged > 0 || carriedForward > 0 || (completedTasks > 0 && onTimeRate < 0.6)) {
       performanceRating = '🔴 Action Required';
-    } else if (onTimeRate >= 0.8 && completedTasks >= 2) {
+    } else if (onTimeRate >= 0.8 && completedTasks >= 2 && slipsLogged === 0 && carriedForward === 0) {
       performanceRating = '🟢 Top Performer';
+    } else {
+      performanceRating = '🟡 Satisfactory';
     }
 
     const efficiencyScore = Math.round(onTimeRate * 100);
@@ -183,13 +300,17 @@ export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): Per
   });
 }
 
-// Compute Project Performance & Health
+/**
+ * Compute Project Performance & Health
+ */
 export function calculateProjectPerformance(projects: Project[], tasks: Task[]): ProjectPerformanceData[] {
   return projects
     .filter((p) => p.status !== 'Archived')
     .map((p) => {
       const pTasks = tasks.filter((t) => t.projectId === p.id);
-      const activeTasks = pTasks.filter((t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked').length;
+      const activeTasks = pTasks.filter(
+        (t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked'
+      ).length;
       const completedTasks = pTasks.filter((t) => t.status === 'Completed').length;
       const total = pTasks.length;
 
@@ -215,7 +336,9 @@ export function calculateProjectPerformance(projects: Project[], tasks: Task[]):
     });
 }
 
-// Global Task Metrics Counter
+/**
+ * Global Task Metrics Counter
+ */
 export function calculateGlobalTaskMetrics(tasks: Task[]): TaskMetrics {
   const total = tasks.length;
   const completed = tasks.filter((t) => t.status === 'Completed').length;
@@ -236,4 +359,51 @@ export function calculateGlobalTaskMetrics(tasks: Task[]): TaskMetrics {
     overdue,
     pending,
   };
+}
+
+/**
+ * Unified calculation of detailed delay metrics for reports and teammate profiles
+ */
+export function calculateTaskDelayDetailed(
+  targetDueDate?: string | Date | null,
+  targetDueTime?: string | null,
+  completedDate?: string | Date | null,
+  completedTime?: string | null,
+  status?: string
+): { isDelayed: boolean; delayMs: number; delayHours: number; delayString: string } {
+  if (!targetDueDate) return { isDelayed: false, delayMs: 0, delayHours: 0, delayString: '' };
+  
+  const targetDate = parseDateWithTime(targetDueDate, targetDueTime || '10:00 PM');
+  if (!targetDate) return { isDelayed: false, delayMs: 0, delayHours: 0, delayString: '' };
+
+  let actualDate: Date;
+  if (status === 'Completed' || status === 'Cancelled') {
+    if (!completedDate) return { isDelayed: false, delayMs: 0, delayHours: 0, delayString: '' };
+    actualDate = parseDateWithTime(completedDate, completedTime || '10:00 PM') || new Date();
+  } else {
+    actualDate = new Date();
+  }
+
+  const delayMs = actualDate.getTime() - targetDate.getTime();
+  if (delayMs <= 0) {
+    return { isDelayed: false, delayMs: 0, delayHours: 0, delayString: '' };
+  }
+
+  const totalHours = Math.round(delayMs / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const remainingHours = totalHours % 24;
+
+  let delayString = '';
+  if (days > 0) {
+    delayString += `${days} day${days > 1 ? 's' : ''}`;
+  }
+  if (remainingHours > 0) {
+    if (delayString) delayString += ', ';
+    delayString += `${remainingHours} hour${remainingHours > 1 ? 's' : ''}`;
+  }
+  if (!delayString) {
+    delayString = `${Math.max(1, Math.round(delayMs / (1000 * 60)))} min`;
+  }
+
+  return { isDelayed: true, delayMs, delayHours: totalHours, delayString };
 }

@@ -6,7 +6,7 @@ import { ArrowLeft, User, Printer } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
-import { isOverdue } from '@/lib/validation';
+import { matchesMonth } from '@/lib/validation';
 import { calculateTeamPerformance, filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData, Project } from '@/types';
 import Header from '@/components/layout/Header';
@@ -44,8 +44,8 @@ export default function IndividualReportPage() {
   const memberTasks = useMemo(() => 
     activeTasks.filter((t) => {
       if (t.assigneeId !== id) return false;
-      const d = t.startDate || t.targetDueDate || t.dueDate;
-      return d ? String(d).startsWith(selectedMonth) : true;
+      const d = t.targetDueDate || t.dueDate || t.startDate;
+      return matchesMonth(d, selectedMonth);
     }), 
   [activeTasks, id, selectedMonth]);
 
@@ -78,14 +78,15 @@ export default function IndividualReportPage() {
     );
   }
 
-  const formattedMonth = new Date(selectedMonth + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const [yearStr, monthStr] = selectedMonth.split('-');
+  const formattedMonth = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
     <>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 no-print bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <button
           onClick={() => router.back()}
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Directory
@@ -106,7 +107,7 @@ export default function IndividualReportPage() {
           </div>
           <button
             onClick={() => window.print()}
-            className="bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            className="bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer"
             aria-label="Print report"
           >
             <Printer className="w-4 h-4" />

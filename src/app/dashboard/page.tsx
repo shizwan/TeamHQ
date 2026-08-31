@@ -2,19 +2,20 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  TrendingUp, 
-  TrendingDown, 
-  ChevronRight, 
-  Filter, 
-  Users, 
-  FolderKanban, 
+import {
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  ChevronRight,
+  Filter,
+  Users,
+  FolderKanban,
   RotateCcw,
   Zap,
-  Eye
+  Eye,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useUpdateDoc } from '@/hooks/useFirestore';
@@ -25,6 +26,8 @@ import Header from '@/components/layout/Header';
 import MetricCard from '@/components/dashboard/MetricCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
+import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
+import TaskPieChart from '@/components/dashboard/TaskPieChart';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -53,7 +56,7 @@ export default function DashboardPage() {
 
   // Executive Callout Lists
   const topPerformers = useMemo(() => {
-    return teamMatrix.filter((m) => m.performanceRating === '🟢 Top Performer' || m.onTimeRate >= 0.8).slice(0, 3);
+    return teamMatrix.filter((m) => m.performanceRating === '🟢 Top Performer' || (m.onTimeRate >= 0.8 && m.completedTasks >= 2 && m.slipsLogged === 0)).slice(0, 3);
   }, [teamMatrix]);
 
   const actionRequiredMembers = useMemo(() => {
@@ -101,7 +104,7 @@ export default function DashboardPage() {
   return (
     <>
       <Header
-        title="Dev Team Scoreboard & Executive Dashboard"
+        title="Team Scoreboard & Executive Dashboard"
         description="Real-Time Executive Monitoring Engine • Team Performance Matrix • Slip Accountability Tracking"
       />
 
@@ -152,17 +155,21 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="space-y-2.5">
-            {topPerformers.map((m) => (
-              <div key={m.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{m.name}</p>
-                  <p className="text-xs text-slate-500">{m.role}</p>
+            {topPerformers.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-2">No qualified top performers yet (requires &gt;= 2 completed on-time).</p>
+            ) : (
+              topPerformers.map((m) => (
+                <div key={m.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{m.name}</p>
+                    <p className="text-xs text-slate-500">{m.role}</p>
+                  </div>
+                  <span className="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg">
+                    {Math.round(m.onTimeRate * 100)}% On-Time
+                  </span>
                 </div>
-                <span className="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg">
-                  {Math.round(m.onTimeRate * 100)}% On-Time
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -177,19 +184,23 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
-            {actionRequiredMembers.map((m) => (
-              <div key={m.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-rose-100 shadow-sm">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{m.name}</p>
-                  <p className="text-xs text-slate-500">
-                    {m.slipsLogged} Slips • {m.carriedForward} Carried Fwd
-                  </p>
+            {actionRequiredMembers.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-2">Zero action-required members! All deliverables on track.</p>
+            ) : (
+              actionRequiredMembers.map((m) => (
+                <div key={m.id} className="flex justify-between items-center bg-white/80 p-2.5 rounded-xl border border-rose-100 shadow-sm">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{m.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {m.slipsLogged} Slips • {m.carriedForward} Carried Fwd
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold px-2 py-1 bg-rose-100 text-rose-800 rounded-lg">
+                    🔴 Action Required
+                  </span>
                 </div>
-                <span className="text-xs font-bold px-2 py-1 bg-rose-100 text-rose-800 rounded-lg">
-                  🔴 Action Required
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -216,6 +227,16 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* VISUAL ANALYTICS: PERFORMANCE BAR CHART & PIE CHART */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="lg:col-span-2">
+          <PerformanceBarChart data={teamMatrix} />
+        </div>
+        <div className="lg:col-span-1">
+          <TaskPieChart metrics={globalMetrics} />
         </div>
       </div>
 
@@ -246,20 +267,30 @@ export default function DashboardPage() {
             <tbody className="divide-y divide-slate-100 font-medium">
               {teamMatrix.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 px-4 font-bold text-slate-900">{row.name}</td>
+                  <td className="py-3 px-4 font-bold text-slate-900">
+                    <Link href={`/dashboard/team/${row.id}`} className="hover:text-indigo-600 transition-colors">
+                      {row.name}
+                    </Link>
+                  </td>
                   <td className="py-3 px-4 text-slate-600">{row.role}</td>
                   <td className="py-3 px-4 text-slate-500">{row.manager}</td>
                   <td className="py-3 px-4 text-center font-semibold text-slate-800">{row.activeTasks}</td>
                   <td className="py-3 px-4 text-center font-semibold text-emerald-600">{row.completedTasks}</td>
                   <td className="py-3 px-4 text-center">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${row.onTimeRate >= 0.8 ? 'bg-emerald-100 text-emerald-800' : (row.onTimeRate >= 0.5 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800')}`}>
-                      {Math.round(row.onTimeRate * 100)}%
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${row.completedTasks === 0 ? 'bg-slate-100 text-slate-600' :
+                        row.onTimeRate >= 0.8 ? 'bg-emerald-100 text-emerald-800' :
+                          (row.onTimeRate >= 0.5 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800')
+                      }`}>
+                      {row.completedTasks === 0 ? '—' : `${Math.round(row.onTimeRate * 100)}%`}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-center font-semibold text-amber-600">{row.carriedForward}</td>
                   <td className="py-3 px-4 text-center font-semibold text-rose-600">{row.slipsLogged}</td>
                   <td className="py-3 px-4 text-center">
-                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${row.performanceRating === '🟢 Top Performer' ? 'bg-emerald-100 text-emerald-800' : (row.performanceRating === '🔴 Action Required' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-slate-100 text-slate-700')}`}>
+                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${row.performanceRating === '🟢 Top Performer' ? 'bg-emerald-100 text-emerald-800' :
+                        (row.performanceRating === '🔴 Action Required' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                          (row.performanceRating === '⚪ Standby' ? 'bg-slate-100 text-slate-600' : 'bg-amber-50 text-amber-800 border border-amber-200'))
+                      }`}>
                       {row.performanceRating}
                     </span>
                   </td>
@@ -420,19 +451,17 @@ export default function DashboardPage() {
                         {t.targetDueDate ? `${new Date(t.targetDueDate).toLocaleDateString()} ${t.targetDueTime || ''}` : '-'}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                          t.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
-                          t.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                          t.status === 'Carried Forward' ? 'bg-amber-100 text-amber-800' :
-                          t.status === 'Blocked' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
-                        }`}>
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${t.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                            t.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                              t.status === 'Carried Forward' ? 'bg-amber-100 text-amber-800' :
+                                t.status === 'Blocked' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
+                          }`}>
                           {t.status}
                         </span>
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                          (t.slipCause && t.slipCause !== 'N/A') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'text-slate-400'
-                        }`}>
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${(t.slipCause && t.slipCause !== 'N/A') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'text-slate-400'
+                          }`}>
                           {t.slipCause || 'N/A'}
                         </span>
                       </td>
@@ -479,13 +508,7 @@ export default function DashboardPage() {
         onStatusChange={async (taskId, newStatus) => {
           const updateData: Partial<Task> = {
             status: newStatus,
-            updatedAt: new Date().toISOString(),
           };
-          if (newStatus === 'Completed') {
-            updateData.completedAt = new Date().toISOString();
-          } else {
-            updateData.completedAt = null;
-          }
           await updateTask(taskId, updateData);
           refetchTasks();
           if (previewTaskTarget && previewTaskTarget.id === taskId) {

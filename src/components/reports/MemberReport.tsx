@@ -63,7 +63,7 @@ const MemberReport = React.memo(function MemberReport({
         <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-xl bg-indigo-50 p-4 text-center border border-indigo-100">
             <p className="text-2xl font-bold text-indigo-700">
-              {onTimePercent}%
+              {member.completedTasks === 0 ? '—' : `${onTimePercent}%`}
             </p>
             <p className="text-xs font-semibold text-indigo-600">On-Time Delivery Rate</p>
           </div>
@@ -96,7 +96,13 @@ const MemberReport = React.memo(function MemberReport({
               <ul className="space-y-2 text-sm text-slate-700">
                 {(() => {
                   const delayedTasks = memberTasks
-                    .map(t => calculateTaskDelay({ dueDate: t.targetDueDate || t.dueDate || '', completedAt: t.completedAt, status: t.status }))
+                    .map(t => calculateTaskDelay({ 
+                      targetDueDate: t.targetDueDate || t.dueDate, 
+                      targetDueTime: t.targetDueTime,
+                      completedDate: t.completedDate || t.completedAt, 
+                      completedTime: t.completedTime,
+                      status: t.status 
+                    }))
                     .filter(d => d.isDelayed);
                   if (delayedTasks.length > 0) {
                     const totalDelayMs = delayedTasks.reduce((acc, curr) => acc + curr.delayMs, 0);
