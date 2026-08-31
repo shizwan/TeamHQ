@@ -1,97 +1,93 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLogger';
-import { validateMemberForm } from '@/lib/validation';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, badRequestResponse, notFoundResponse, serverErrorResponse } from '@/lib/auth';
+import { getTeamMemberById, updateTeamMember, deleteTeamMember } from '@/lib/services/teamService';
+import { UpdateMemberSchema } from '@/lib/validation/schemas';
+import { validateCsrf } from '@/lib/security';
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(req);
-  if (!auth) return unauthorizedResponse();
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { id } = await params;
-    const body = await req.json();
-    const existing = await prisma.teamMember.findUnique({ where: { id } });
-
-    if (!existing) {
-      return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
-    }
-
-    const name = body.name !== undefined ? (body.name || '').trim() : existing.name;
-    const role = body.role !== undefined ? (body.role || '').trim() : existing.role;
-    const department = body.department !== undefined ? body.department : existing.department;
-
-    const validationError = validateMemberForm({ name, role, department });
-    if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
-    }
-
-    const updateData: any = {
-      name,
-      role,
-      department,
-    };
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.manager !== undefined) updateData.manager = body.manager;
-
-    const member = await prisma.teamMember.update({
-      where: { id },
-      data: updateData,
-    });
-
-    logActivity({
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-      action: 'updated',
-      entityType: 'team_member',
-      entityId: member.id,
-      entityTitle: member.name,
-      details: `Updated profile and settings for ${member.name}.`,
-      metadata: { role: member.role, department: member.department, status: member.status },
-    }).catch((err) => console.error('Activity log error:', err));
-
+    const member = await getTeamMemberById(id, authResult.user.workspaceId);
+    if (!member) return notFoundResponse('Team member not found');
     return NextResponse.json(member);
   } catch (error) {
-    console.error('Failed to update member:', error);
-    return NextResponse.json({ error: 'Failed to update member', details: String(error) }, { status: 500 });
+    console.error('[GET TEAM MEMBER BY ID ERROR]', error);
+    return serverErrorResponse('Failed to fetch team member');
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(req);
-  if (!auth) return unauthorizedResponse();
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireAuth(request, 'team:manage');
+  if (authResult instanceof NextResponse) return authResult;
+
+  if (!validateCsrf(request)) {
+    return badRequestResponse('CSRF validation failed');
+  }
 
   try {
     const { id } = await params;
-    const existing = await prisma.teamMember.findUnique({ where: { id } });
+    const body = await request.json().catch(() => ({}));
+    const parseResult = UpdateMemberSchema.safeParse(body);
 
-    if (!existing) {
-      return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
+    if (!parseResult.success) {
+      return badRequestResponse('Validation failed', parseResult.error.flatten().fieldErrors);
     }
 
-    // Check if member has active tasks and log count
-    const taskCount = await prisma.task.count({ where: { assigneeId: id } });
-
-    await prisma.teamMember.delete({
-      where: { id },
+    const updated = await updateTeamMember(id, parseResult.data, {
+      uid: authResult.user.uid,
+      displayName: authResult.user.displayName,
+      email: authResult.user.email,
+      workspaceId: authResult.user.workspaceId,
     });
 
-    logActivity({
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-      action: 'deleted',
-      entityType: 'team_member',
-      entityId: existing.id,
-      entityTitle: existing.name,
-      details: `Removed ${existing.name} from team roster (${taskCount} associated task(s) removed).`,
-      metadata: { role: existing.role, department: existing.department, taskCount },
-    }).catch((err) => console.error('Activity log error:', err));
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error('[UPDATE TEAM MEMBER ERROR]', error);
+    if (error.message === 'Team member not found') {
+      return notFoundResponse('Team member not found');
+    }
+    return badRequestResponse(error.message || 'Failed to update team member');
+  }
+}
 
-    return NextResponse.json({ success: true, deletedTasksCount: taskCount });
-  } catch (error) {
-    console.error('Failed to delete member:', error);
-    return NextResponse.json({ error: 'Failed to delete member', details: String(error) }, { status: 500 });
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireAuth(request, 'team:delete');
+  if (authResult instanceof NextResponse) return authResult;
+
+  if (!validateCsrf(request)) {
+    return badRequestResponse('CSRF validation failed');
+  }
+
+  try {
+    const { id } = await params;
+    const result = await deleteTeamMember(id, {
+      uid: authResult.user.uid,
+      displayName: authResult.user.displayName,
+      email: authResult.user.email,
+      workspaceId: authResult.user.workspaceId,
+    });
+
+    return NextResponse.json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error('[DELETE TEAM MEMBER ERROR]', error);
+    if (error.message === 'Team member not found') {
+      return notFoundResponse('Team member not found');
+    }
+    return badRequestResponse(error.message || 'Failed to remove team member');
   }
 }

@@ -1,71 +1,84 @@
 'use client';
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useAddDoc, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore';
-import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
+import { getTasksCollectionPath, getProjectsCollectionPath, getTeamCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
-import { sanitizeString } from '@/lib/validation';
 import { filterActiveTasks } from '@/lib/trackerEngine';
-import type { TeamMember, Task, Project, TaskStatus } from '@/types';
+import type { Task, Project, TeamMember, TaskStatus } from '@/types';
 import Header from '@/components/layout/Header';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TaskBoard from '@/components/tasks/board/TaskBoard';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
-import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 export default function BoardPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const userId = user?.uid || '';
 
-  const teamPath = userId ? getTeamCollectionPath(userId) : null;
-  const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
   const tasksPath = userId ? getTasksCollectionPath(userId) : null;
+  const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
+  const teamPath = userId ? getTeamCollectionPath(userId) : null;
 
-  const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
-  const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
+  const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
+  const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
 
   const { addDocument: addTask, loading: addingTask } = useAddDoc(tasksPath);
-  const { updateDocument } = useUpdateDoc(tasksPath);
+  const { updateDocument, loading: updatingTask } = useUpdateDoc(tasksPath);
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
 
-  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
-  const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
-  const [addTaskTargetStatus, setAddTaskTargetStatus] = React.useState<TaskStatus | null>(null);
-  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
+  const [editTaskTarget, setEditTaskTarget] = useState<Task | null>(null);
+  const [addTaskTargetStatus, setAddTaskTargetStatus] = useState<TaskStatus | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [statusChangeTarget, setStatusChangeTarget] = useState<{ task: Task; newStatus: TaskStatus } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Filter out archived projects & tasks of archived projects
   const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
 
   const handleStatusChange = useCallback(
-    async (taskId: string, newStatus: TaskStatus) => {
-      const updateData: Partial<Task> = {
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (newStatus === 'Completed') {
-        updateData.completedAt = new Date().toISOString();
-      } else {
-        updateData.completedAt = null;
-      }
-
-      const success = await updateDocument(taskId, updateData);
-
-      if (success) {
-        addToast('info', 'Status updated', `Task moved to "${newStatus}".`);
-        refetchTasks();
-      } else {
-        addToast('error', 'Failed to update status', 'Please try again.');
-      }
+    (taskId: string, newStatus: TaskStatus) => {
+      const target = tasks.find((t) => t.id === taskId);
+      if (!target || target.status === newStatus) return;
+      setStatusChangeTarget({ task: target, newStatus });
     },
-    [updateDocument, addToast, refetchTasks]
+    [tasks]
   );
+
+  const handleConfirmStatusChange = useCallback(async () => {
+    if (!statusChangeTarget) return;
+    const { task, newStatus } = statusChangeTarget;
+    setUpdatingStatus(true);
+
+    const updateData: Partial<Task> = {
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (newStatus === 'Completed') {
+      updateData.completedAt = new Date().toISOString();
+    } else {
+      updateData.completedAt = null;
+    }
+
+    try {
+      const success = await updateDocument(task.id, updateData);
+      if (success) {
+        addToast('success', 'Status updated', `"${task.title}" status changed to ${newStatus}.`);
+        refetchTasks();
+      }
+    } catch {
+      addToast('error', 'Failed to update status', 'Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+      setStatusChangeTarget(null);
+    }
+  }, [statusChangeTarget, updateDocument, addToast, refetchTasks]);
 
   const handleQuickAdd = useCallback((status: TaskStatus) => {
     setAddTaskTargetStatus(status);
@@ -93,24 +106,14 @@ export default function BoardPage() {
     [addTask, addToast, refetchTasks, userId]
   );
 
-  // Quick complete: instantly marks a task as Completed
+  // Quick complete: triggers confirmation popup
   const handleQuickComplete = useCallback(
-    async (taskId: string) => {
-      const now = new Date().toISOString();
-      const success = await updateDocument(taskId, {
-        status: 'Completed' as TaskStatus,
-        completedAt: now,
-        updatedAt: now,
-      });
-
-      if (success) {
-        addToast('success', 'Task completed', 'Task marked as completed.');
-        refetchTasks();
-      } else {
-        addToast('error', 'Failed to complete task', 'Please try again.');
-      }
+    (taskId: string) => {
+      const target = tasks.find((t) => t.id === taskId);
+      if (!target || target.status === 'Completed') return;
+      setStatusChangeTarget({ task: target, newStatus: 'Completed' });
     },
-    [updateDocument, addToast, refetchTasks]
+    [tasks]
   );
 
   const handleEditTask = useCallback(
@@ -136,7 +139,7 @@ export default function BoardPage() {
         addToast('success', 'Task deleted', `"${deleteTarget.title}" has been removed.`);
         refetchTasks();
       }
-    } catch (error) {
+    } catch {
       addToast('error', 'Failed to delete task', 'Please try again.');
     }
     setDeleteTarget(null);
@@ -147,50 +150,45 @@ export default function BoardPage() {
   }, []);
 
   if (teamLoading || projectsLoading || tasksLoading) {
-    return <LoadingSpinner message="Loading board..." />;
+    return <LoadingSpinner message="Loading task board..." />;
   }
 
   return (
     <>
       <Header
-        title="Kanban Board"
-        description="Drag and drop tasks between columns to update their status."
+        title="Task Board"
+        description="Drag and drop tasks between workflow stages to update their status"
       />
 
       <TaskBoard
         tasks={activeTasks}
-        projects={activeProjects}
         team={team}
+        projects={activeProjects}
         onStatusChange={handleStatusChange}
-        onEdit={setEditTaskTarget}
+        onEdit={(task) => setEditTaskTarget(task)}
         onDelete={handleRequestDelete}
-        onQuickAdd={handleQuickAdd}
         onQuickComplete={handleQuickComplete}
-        onPreview={setPreviewTaskTarget}
+        onQuickAdd={handleQuickAdd}
       />
 
-      <TaskPreviewModal
-        isOpen={!!previewTaskTarget}
-        onClose={() => setPreviewTaskTarget(null)}
-        task={previewTaskTarget}
-        projects={activeProjects}
-        team={team}
-        onEdit={setEditTaskTarget}
-        onDelete={handleRequestDelete}
-        onStatusChange={handleStatusChange}
-      />
-
+      {/* Status Change Confirmation Pop-up */}
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete this task?"
-        description={`"${deleteTarget?.title}" will be permanently deleted. This action cannot be undone.`}
-        confirmLabel="Delete Task"
-        variant="danger"
-        onConfirm={handleDeleteTask}
-        onCancel={() => setDeleteTarget(null)}
-        loading={deletingTask}
+        open={!!statusChangeTarget}
+        title="Change Deliverable Status?"
+        description={
+          statusChangeTarget?.newStatus === 'Completed'
+            ? `Mark "${statusChangeTarget?.task.title}" as Completed? This will record the completion timestamp and compute SLA metrics.`
+            : `Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`
+        }
+        confirmLabel={`Change to ${statusChangeTarget?.newStatus || 'Status'}`}
+        cancelLabel="Cancel"
+        variant={statusChangeTarget?.newStatus === 'Completed' ? 'success' : statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
+        onConfirm={handleConfirmStatusChange}
+        onCancel={() => setStatusChangeTarget(null)}
+        loading={updatingStatus}
       />
 
+      {/* Edit Task Modal */}
       <EditTaskModal
         isOpen={!!editTaskTarget}
         onClose={() => setEditTaskTarget(null)}
@@ -198,17 +196,30 @@ export default function BoardPage() {
         projects={activeProjects}
         team={team}
         onSubmit={handleEditTask}
-        loading={false}
+        loading={updatingTask}
       />
 
+      {/* Quick Add Task Modal */}
       <AddTaskModal
         isOpen={!!addTaskTargetStatus}
         onClose={() => setAddTaskTargetStatus(null)}
-        defaultStatus={addTaskTargetStatus}
         projects={activeProjects}
         team={team}
+        defaultStatus={addTaskTargetStatus || 'In Progress'}
         onSubmit={handleCreateTask}
         loading={addingTask}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Task?"
+        description={`"${deleteTarget?.title}" will be permanently removed. This action cannot be undone.`}
+        confirmLabel="Delete Task"
+        variant="danger"
+        onConfirm={handleDeleteTask}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deletingTask}
       />
     </>
   );

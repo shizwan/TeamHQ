@@ -1,159 +1,90 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { 
-  calculateDaysActive, 
-  calculateDelayHours, 
-  calculateOnTimeStatus, 
-  calculateLifecycleStatus,
-  formatTimeString
-} from '@/lib/trackerEngine';
-import { logActivity } from '@/lib/activityLogger';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, badRequestResponse, notFoundResponse, serverErrorResponse } from '@/lib/auth';
+import { getTaskById, updateTask, deleteTask } from '@/lib/services/taskService';
+import { UpdateTaskSchema } from '@/lib/validation/schemas';
+import { validateCsrf } from '@/lib/security';
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(req);
-  if (!auth) return unauthorizedResponse();
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { id } = await params;
-    const body = await req.json();
-
-    // Fetch existing task to merge fields
-    const existing = await prisma.task.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
-
-    const status = body.status !== undefined ? body.status : existing.status;
-    const slipCause = body.slipCause !== undefined ? body.slipCause : existing.slipCause;
-    const startDate = body.startDate !== undefined 
-      ? (body.startDate ? new Date(body.startDate) : null) 
-      : existing.startDate;
-    
-    const targetDueDate = body.targetDueDate !== undefined 
-      ? (body.targetDueDate ? new Date(body.targetDueDate) : null) 
-      : (body.dueDate !== undefined ? (body.dueDate ? new Date(body.dueDate) : null) : existing.targetDueDate);
-    
-    const targetTime = body.targetDueTime !== undefined ? body.targetDueTime : existing.targetDueTime;
-    
-    let completedDate: Date | null = null;
-    let compTime: string | null = null;
-
-    if (status === 'Completed') {
-      completedDate = body.completedDate !== undefined 
-        ? (body.completedDate ? new Date(body.completedDate) : new Date()) 
-        : (existing.completedDate || new Date());
-
-      compTime = body.completedTime !== undefined
-        ? body.completedTime
-        : (existing.completedTime || formatTimeString(completedDate));
-    } else {
-      // If moving away from completed, clear completion date
-      completedDate = body.completedDate !== undefined 
-        ? (body.completedDate ? new Date(body.completedDate) : null) 
-        : (existing.status === 'Completed' ? null : existing.completedDate);
-      
-      compTime = body.completedTime !== undefined ? body.completedTime : (existing.status === 'Completed' ? null : existing.completedTime);
-    }
-
-    const daysActive = calculateDaysActive(startDate, completedDate);
-    const delayHours = calculateDelayHours(targetDueDate, targetTime, completedDate, compTime, status);
-    const onTimeStatus = calculateOnTimeStatus(status, targetDueDate, targetTime, completedDate, compTime);
-    const lifecycleStatus = calculateLifecycleStatus(status, onTimeStatus, slipCause, delayHours);
-
-    const updateData: any = {
-      ...body,
-      status,
-      slipCause,
-      startDate,
-      targetDueDate,
-      targetDueTime: targetTime,
-      completedDate,
-      completedTime: compTime,
-      daysActive,
-      delayHours,
-      onTimeStatus,
-      lifecycleStatus,
-      completedAt: status === 'Completed' ? (completedDate || new Date()) : null,
-      updatedAt: new Date(),
-    };
-
-    delete updateData.dueDate;
-
-    if (body.labels && typeof body.labels !== 'string') {
-      updateData.labels = JSON.stringify(body.labels);
-    }
-    if (body.checklist && typeof body.checklist !== 'string') {
-      updateData.checklist = JSON.stringify(body.checklist);
-    }
-
-    const task = await prisma.task.update({
-      where: { id },
-      data: updateData,
-    });
-
-    // Determine activity action
-    const isStatusChange = body.status && body.status !== existing.status;
-    const action = isStatusChange ? (body.status === 'Completed' ? 'completed' : 'status_changed') : 'updated';
-    const details = isStatusChange
-      ? `Changed status of [${task.deliverableId || 'DLV'}] from "${existing.status}" to "${task.status}".`
-      : `Updated details for [${task.deliverableId || 'DLV'}] "${task.title}".`;
-
-    logActivity({
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-      action,
-      entityType: 'task',
-      entityId: task.id,
-      entityTitle: task.title,
-      details,
-      metadata: {
-        deliverableId: task.deliverableId,
-        prevStatus: existing.status,
-        newStatus: task.status,
-        slipCause: task.slipCause,
-      },
-    }).catch((err) => console.error('Activity log error:', err));
-
+    const task = await getTaskById(id, authResult.user.workspaceId);
+    if (!task) return notFoundResponse('Deliverable not found');
     return NextResponse.json(task);
   } catch (error) {
-    console.error("PATCH Task Error:", error);
-    return NextResponse.json({ error: 'Failed to update task', details: String(error) }, { status: 500 });
+    console.error('[GET TASK BY ID ERROR]', error);
+    return serverErrorResponse('Failed to fetch deliverable');
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(req);
-  if (!auth) return unauthorizedResponse();
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireAuth(request, 'task:edit');
+  if (authResult instanceof NextResponse) return authResult;
+
+  if (!validateCsrf(request)) {
+    return badRequestResponse('CSRF validation failed');
+  }
 
   try {
     const { id } = await params;
-    const existing = await prisma.task.findUnique({ where: { id } });
+    const body = await request.json().catch(() => ({}));
+    const parseResult = UpdateTaskSchema.safeParse(body);
 
-    if (!existing) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    if (!parseResult.success) {
+      return badRequestResponse('Validation failed', parseResult.error.flatten().fieldErrors);
     }
 
-    await prisma.task.delete({
-      where: { id },
+    const updated = await updateTask(id, parseResult.data, {
+      uid: authResult.user.uid,
+      displayName: authResult.user.displayName,
+      email: authResult.user.email,
+      workspaceId: authResult.user.workspaceId,
     });
 
-    logActivity({
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-      action: 'deleted',
-      entityType: 'task',
-      entityId: existing.id,
-      entityTitle: existing.title,
-      details: `Deleted deliverable [${existing.deliverableId || 'DLV'}] "${existing.title}".`,
-      metadata: { deliverableId: existing.deliverableId },
-    }).catch((err) => console.error('Activity log error:', err));
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error('[UPDATE TASK ERROR]', error);
+    if (error.message === 'Task not found') {
+      return notFoundResponse('Deliverable not found');
+    }
+    return badRequestResponse(error.message || 'Failed to update deliverable');
+  }
+}
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("DELETE Task Error:", error);
-    return NextResponse.json({ error: 'Failed to delete task', details: String(error) }, { status: 500 });
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireAuth(request, 'task:delete');
+  if (authResult instanceof NextResponse) return authResult;
+
+  if (!validateCsrf(request)) {
+    return badRequestResponse('CSRF validation failed');
+  }
+
+  try {
+    const { id } = await params;
+    await deleteTask(id, {
+      uid: authResult.user.uid,
+      displayName: authResult.user.displayName,
+      email: authResult.user.email,
+      workspaceId: authResult.user.workspaceId,
+    });
+
+    return NextResponse.json({ success: true, message: 'Deliverable deleted successfully' });
+  } catch (error: any) {
+    console.error('[DELETE TASK ERROR]', error);
+    if (error.message === 'Task not found') {
+      return notFoundResponse('Deliverable not found');
+    }
+    return badRequestResponse(error.message || 'Failed to delete deliverable');
   }
 }

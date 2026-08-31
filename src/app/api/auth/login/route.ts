@@ -1,70 +1,97 @@
 import { NextResponse } from 'next/server';
-import { signSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } from '@/lib/auth';
+import { authenticateUser } from '@/lib/services/userService';
+import { signSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS, badRequestResponse, unauthorizedResponse } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { LoginSchema } from '@/lib/validation/schemas';
+import { logActivity } from '@/lib/services/activityService';
 
-export const dynamic = 'force-dynamic';
-
-// Default production admin credentials (can be overridden by environment variables)
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@teamhq.com').toLowerCase().trim();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password';
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    // 1. IP / Key-based Rate Limiting for Login (Max 5 attempts / 60 seconds)
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'localhost';
-    const rateLimit = checkRateLimit(`login:${ip}`, 5, 60000);
-
+    // 1. Enforce rate limiting on login attempts
+    const rateLimitKey = request.headers.get('x-forwarded-for') || 'login-ip';
+    const rateLimit = checkRateLimit(rateLimitKey, 10, 60000); // 10 attempts per minute
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: `Too many login attempts. Please wait ${Math.ceil(rateLimit.resetMs / 1000)} seconds.` },
+        { error: 'Too many login attempts. Please try again in 1 minute.', code: 'RATE_LIMITED' },
         { status: 429 }
       );
     }
 
-    const body = await req.json();
-    const email = (body.email || '').toLowerCase().trim();
-    const password = body.password || '';
+    // 2. Validate input payload with Zod
+    const body = await request.json().catch(() => ({}));
+    const parseResult = LoginSchema.safeParse(body);
 
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+    if (!parseResult.success) {
+      return badRequestResponse('Invalid login credentials', parseResult.error.flatten().fieldErrors);
     }
 
-    // 2. Validate credentials
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    const { email, password } = parseResult.data;
+
+    // 3. Authenticate against database with bcrypt
+    const user = await authenticateUser(email, password);
+
+    if (!user) {
+      // Audit failed login
+      await logActivity({
+        actorName: 'Anonymous User',
+        actorEmail: email,
+        action: 'updated',
+        entityType: 'system',
+        entityTitle: 'Failed Login Attempt',
+        details: `Failed sign-in attempt for email: ${email}`,
+      });
+
+      return unauthorizedResponse('Invalid email or password.');
     }
 
-    // 3. Generate signed JWT session
-    const sessionUser = {
-      uid: 'admin-user',
-      email: ADMIN_EMAIL,
-      displayName: 'Admin User',
-      role: 'admin',
-    };
-
-    const token = await signSessionToken(sessionUser);
-
-    // 4. Create secure response with HttpOnly cookie
-    const response = NextResponse.json({
-      success: true,
-      user: sessionUser,
+    // 4. Generate JWT session token
+    const token = await signSessionToken({
+      uid: user.id,
+      email: user.email,
+      displayName: user.name,
+      role: user.role,
+      workspaceId: user.workspaceId,
     });
 
-    const isProd = process.env.NODE_ENV === 'production';
+    // 5. Create secure session cookie response
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        uid: user.id,
+        email: user.email,
+        displayName: user.name,
+        role: user.role,
+        workspaceId: user.workspaceId,
+      },
+    });
 
     response.cookies.set({
       name: SESSION_COOKIE_NAME,
       value: token,
       httpOnly: true,
-      secure: isProd,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      path: '/',
       maxAge: SESSION_DURATION_SECONDS,
+      path: '/',
+    });
+
+    // Audit successful login
+    await logActivity({
+      userId: user.id,
+      actorName: user.name,
+      actorEmail: user.email,
+      action: 'updated',
+      entityType: 'system',
+      entityTitle: 'User Login',
+      details: `${user.name} (${user.role}) logged in successfully.`,
     });
 
     return response;
   } catch (error) {
-    console.error('Login error:', error);
-    return NextResponse.json({ error: 'Authentication failed' }, { status: 500 });
+    console.error('[AUTH LOGIN ERROR]', error);
+    return NextResponse.json(
+      { error: 'An unexpected error occurred during sign in.', code: 'INTERNAL_ERROR' },
+      { status: 500 }
+    );
   }
 }

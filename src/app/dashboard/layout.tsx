@@ -3,15 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
+import { SidebarProvider } from '@/contexts/SidebarContext';
 import Sidebar from '@/components/layout/Sidebar';
-import GlobalSearch from '@/components/search/GlobalSearch';
+import Navbar from '@/components/layout/Navbar';
 import ToastContainer from '@/components/ui/Toast';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { isCollapsed } = useSidebar();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -41,11 +40,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row w-full max-w-full overflow-x-clip" suppressHydrationWarning>
       <Sidebar />
       <main
-        className="flex-1 min-w-0 min-h-screen flex flex-col transition-all duration-300 ease-in-out"
+        className="flex-1 min-w-0 min-h-screen flex flex-col transition-all duration-300 ease-in-out bg-slate-50"
         suppressHydrationWarning
       >
-        <div className="w-full max-w-full p-4 sm:p-6 lg:p-8 pb-16 min-w-0" suppressHydrationWarning>
-          <GlobalSearch />
+        <Navbar />
+        <div className="w-full max-w-full p-4 sm:p-6 lg:p-8 pb-16 min-w-0 flex-1" suppressHydrationWarning>
           {children}
         </div>
       </main>

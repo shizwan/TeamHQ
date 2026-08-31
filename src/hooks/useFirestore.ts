@@ -1,37 +1,52 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import useSWR, { mutate as globalMutate } from 'swr';
+import { useCallback, useState } from 'react';
 
-// Reusing the same hook names to avoid refactoring the entire dashboard
-export function useCollection<T>(apiEndpoint: string | null) {
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchData = useCallback(async () => {
-    if (!apiEndpoint) {
-      setData([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+const fetcher = async (url: string) => {
+  const res = await fetch(url, {
+    headers: {
+      'x-requested-with': 'XMLHttpRequest',
+    },
+  });
+  if (!res.ok) {
+    let errMsg = 'Failed to fetch data';
     try {
-      const res = await fetch(apiEndpoint);
-      if (!res.ok) throw new Error('Failed to fetch data');
-      const json = await res.json();
-      setData(json);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      const errJson = await res.json();
+      errMsg = errJson.error || errJson.message || errMsg;
+    } catch {}
+    throw new Error(errMsg);
+  }
+  return await res.json();
+};
+
+/**
+ * Enhanced useCollection hook powered by SWR caching & deduplication
+ */
+export function useCollection<T>(apiEndpoint: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<T[]>(
+    apiEndpoint,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 2000,
+      fallbackData: [],
     }
-  }, [apiEndpoint]);
+  );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const refetch = useCallback(async () => {
+    if (apiEndpoint) {
+      await mutate();
+    }
+  }, [apiEndpoint, mutate]);
 
-  return { data, loading, error, refetch: fetchData };
+  return {
+    data: Array.isArray(data) ? data : [],
+    loading: isLoading,
+    error: error ? error.message : null,
+    refetch,
+    mutate,
+  };
 }
 
 export function useAddDoc(apiEndpoint: string | null) {
@@ -45,9 +60,13 @@ export function useAddDoc(apiEndpoint: string | null) {
     try {
       const res = await fetch(apiEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-requested-with': 'XMLHttpRequest',
+        },
         body: JSON.stringify(data),
       });
+
       if (!res.ok) {
         let errMsg = 'Failed to add document';
         try {
@@ -56,7 +75,12 @@ export function useAddDoc(apiEndpoint: string | null) {
         } catch {}
         throw new Error(errMsg);
       }
+
       const json = await res.json();
+      // Invalidate relevant SWR caches
+      globalMutate(apiEndpoint);
+      globalMutate('/api/dashboard/metrics');
+      globalMutate('/api/activity');
       return json.id || json || true;
     } catch (err: any) {
       setError(err.message);
@@ -80,9 +104,13 @@ export function useUpdateDoc(apiEndpoint: string | null) {
     try {
       const res = await fetch(`${apiEndpoint}/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-requested-with': 'XMLHttpRequest',
+        },
         body: JSON.stringify(data),
       });
+
       if (!res.ok) {
         let errMsg = 'Failed to update document';
         try {
@@ -91,6 +119,12 @@ export function useUpdateDoc(apiEndpoint: string | null) {
         } catch {}
         throw new Error(errMsg);
       }
+
+      // Invalidate caches
+      globalMutate(apiEndpoint);
+      globalMutate(`${apiEndpoint}/${id}`);
+      globalMutate('/api/dashboard/metrics');
+      globalMutate('/api/activity');
       return true;
     } catch (err: any) {
       setError(err.message);
@@ -114,7 +148,11 @@ export function useDeleteDoc(apiEndpoint: string | null) {
     try {
       const res = await fetch(`${apiEndpoint}/${id}`, {
         method: 'DELETE',
+        headers: {
+          'x-requested-with': 'XMLHttpRequest',
+        },
       });
+
       if (!res.ok) {
         let errMsg = 'Failed to delete document';
         try {
@@ -123,6 +161,11 @@ export function useDeleteDoc(apiEndpoint: string | null) {
         } catch {}
         throw new Error(errMsg);
       }
+
+      // Invalidate caches
+      globalMutate(apiEndpoint);
+      globalMutate('/api/dashboard/metrics');
+      globalMutate('/api/activity');
       return true;
     } catch (err: any) {
       setError(err.message);

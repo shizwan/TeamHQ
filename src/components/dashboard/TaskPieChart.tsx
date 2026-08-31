@@ -10,12 +10,14 @@ import {
   Legend,
 } from 'recharts';
 import { PieChart as PieChartIcon } from 'lucide-react';
-import type { TaskMetrics } from '@/types';
+import type { Task, TaskMetrics } from '@/types';
 import { PIE_COLORS } from '@/types';
+import { calculateGlobalTaskMetrics } from '@/lib/trackerEngine';
 import EmptyState from '@/components/ui/EmptyState';
 
 interface TaskPieChartProps {
-  metrics: TaskMetrics;
+  metrics?: TaskMetrics;
+  tasks?: Task[];
 }
 
 interface PieEntry {
@@ -32,7 +34,18 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   'Pending': PIE_COLORS['Pending'] || '#94a3b8',
 };
 
-export default function TaskPieChart({ metrics }: TaskPieChartProps) {
+export default function TaskPieChart({ metrics: metricsProp, tasks }: TaskPieChartProps) {
+  const metrics: TaskMetrics = metricsProp || (tasks ? calculateGlobalTaskMetrics(tasks) : {
+    total: 0,
+    completed: 0,
+    inProgress: 0,
+    carriedForward: 0,
+    blocked: 0,
+    cancelled: 0,
+    overdue: 0,
+    pending: 0,
+  });
+
   const rawData: PieEntry[] = [
     { name: 'Completed', value: metrics.completed },
     { name: 'In Progress', value: metrics.inProgress },

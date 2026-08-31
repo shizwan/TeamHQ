@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, User, Briefcase, AlertTriangle, CheckCircle2, Edit2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore';
 import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
-import { isOverdue, calculateTaskDelay } from '@/lib/validation';
+import { calculateTaskDelay } from '@/lib/validation';
 import { calculateTeamPerformance, filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, PerformanceData, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
@@ -44,10 +44,12 @@ export default function TeammateProfilePage() {
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
   const { updateDocument: updateTeamMember, loading: updatingMember } = useUpdateDoc(teamPath);
 
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
-  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
-  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTaskTarget, setEditTaskTarget] = useState<Task | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [previewTaskTarget, setPreviewTaskTarget] = useState<Task | null>(null);
+  const [statusChangeTarget, setStatusChangeTarget] = useState<{ task: Task; newStatus: TaskStatus } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
@@ -80,7 +82,17 @@ export default function TeammateProfilePage() {
     return res[0] || null;
   }, [member, memberTasks]);
 
-  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+  const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
+    const target = memberTasks.find((t) => t.id === taskId);
+    if (!target || target.status === newStatus) return;
+    setStatusChangeTarget({ task: target, newStatus });
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusChangeTarget) return;
+    const { task, newStatus } = statusChangeTarget;
+    setUpdatingStatus(true);
+
     const updateData: Partial<Task> = {
       status: newStatus,
       updatedAt: new Date().toISOString(),
@@ -92,12 +104,17 @@ export default function TeammateProfilePage() {
       updateData.completedAt = null;
     }
 
-    const success = await updateTask(taskId, updateData);
-    if (success) {
-      addToast('success', 'Task updated', `Status changed to ${newStatus}.`);
-      refetchTasks();
-    } else {
+    try {
+      const success = await updateTask(task.id, updateData);
+      if (success) {
+        addToast('success', 'Status updated', `"${task.title}" status changed to ${newStatus}.`);
+        refetchTasks();
+      }
+    } catch {
       addToast('error', 'Failed to update status', 'Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+      setStatusChangeTarget(null);
     }
   };
 
@@ -130,7 +147,7 @@ export default function TeammateProfilePage() {
         addToast('success', 'Task deleted', `"${deleteTarget.title}" has been successfully removed.`);
         refetchTasks();
       }
-    } catch (error) {
+    } catch {
       addToast('error', 'Failed to delete task', 'Please try again later.');
     } finally {
       setDeleteTarget(null);
@@ -373,6 +390,23 @@ export default function TeammateProfilePage() {
             </div>
           )}
       </div>
+
+      {/* Status Change Confirmation Pop-up */}
+      <ConfirmDialog
+        open={!!statusChangeTarget}
+        title="Change Deliverable Status?"
+        description={
+          statusChangeTarget?.newStatus === 'Completed'
+            ? `Mark "${statusChangeTarget?.task.title}" as Completed? This will record the completion timestamp and compute SLA metrics.`
+            : `Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`
+        }
+        confirmLabel={`Change to ${statusChangeTarget?.newStatus || 'Status'}`}
+        cancelLabel="Cancel"
+        variant={statusChangeTarget?.newStatus === 'Completed' ? 'success' : statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
+        onConfirm={handleConfirmStatusChange}
+        onCancel={() => setStatusChangeTarget(null)}
+        loading={updatingStatus}
+      />
 
       <TaskPreviewModal
         isOpen={!!previewTaskTarget}

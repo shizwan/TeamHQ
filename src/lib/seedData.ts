@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { hashPassword } from '@/lib/auth';
 import { 
   calculateDaysActive, 
   calculateDelayHours, 
@@ -83,89 +84,124 @@ export const INITIAL_DELIVERABLES = [
   { dlv_id: "DLV-000045", member: "Danish", project: "Rentigo", title: "Rentigo Frontend Development & Ongoing Enhancements", start_date: "2026-08-21", target_date: null, target_time: "10:00 PM", status: "In Progress", slip_cause: "N/A", comp_date: null, comp_time: "10:00 PM" }
 ];
 
-export async function seedDatabase() {
-  const userId = 'admin-user';
+export async function seedDatabase(adminEmail = 'admin@teamhq.com', adminPassword = 'password') {
+  const workspaceId = 'default-workspace';
 
-  // Clear existing
-  await prisma.task.deleteMany({});
-  await prisma.project.deleteMany({});
-  await prisma.teamMember.deleteMany({});
-
-  // 1. Seed Team Members
-  const memberMap: Record<string, string> = {};
-  for (const m of INITIAL_MEMBERS) {
-    const created = await prisma.teamMember.create({
-      data: {
-        userId,
-        name: m.name,
-        role: m.role,
-        department: m.department,
-        status: m.status,
-        manager: m.manager,
-      }
+  return await prisma.$transaction(async (tx) => {
+    // 1. Create Default Workspace
+    await tx.workspace.upsert({
+      where: { id: workspaceId },
+      update: {},
+      create: {
+        id: workspaceId,
+        name: 'TeamHQ Workspace',
+        slug: 'teamhq',
+      },
     });
-    memberMap[m.name] = created.id;
-  }
 
-  // 2. Seed Projects
-  const projectMap: Record<string, string> = {};
-  for (const p of INITIAL_PROJECTS) {
-    const created = await prisma.project.create({
-      data: {
-        userId,
-        title: p.title,
-        priority: p.priority,
-        status: p.status,
-        leadOwner: p.leadOwner,
-        targetDate: p.targetDate ? new Date(p.targetDate) : null,
-      }
+    // 2. Create Default Admin User with Bcrypt Hash
+    const passwordHash = await hashPassword(adminPassword);
+    const adminUser = await tx.user.upsert({
+      where: { email: adminEmail.trim().toLowerCase() },
+      update: {
+        name: 'Shizwan',
+        role: 'ADMIN',
+        active: true,
+        workspaceId,
+      },
+      create: {
+        email: adminEmail.trim().toLowerCase(),
+        passwordHash,
+        name: 'Shizwan',
+        role: 'ADMIN',
+        active: true,
+        workspaceId,
+      },
     });
-    projectMap[p.title] = created.id;
-  }
 
-  // 3. Seed Deliverables
-  for (const d of INITIAL_DELIVERABLES) {
-    const assigneeId = memberMap[d.member] || Object.values(memberMap)[0];
-    const projectId = projectMap[d.project || 'ApxGP'] || Object.values(projectMap)[0];
+    // 3. Clear and seed Team Members
+    await tx.task.deleteMany({ where: { workspaceId } });
+    await tx.project.deleteMany({ where: { workspaceId } });
+    await tx.teamMember.deleteMany({ where: { workspaceId } });
 
-    const startDate = d.start_date ? new Date(d.start_date) : new Date();
-    const targetDueDate = d.target_date ? new Date(d.target_date) : null;
-    const completedDate = d.comp_date ? new Date(d.comp_date) : null;
+    const memberMap: Record<string, string> = {};
+    for (const m of INITIAL_MEMBERS) {
+      const created = await tx.teamMember.create({
+        data: {
+          workspaceId,
+          userId: adminUser.id,
+          name: m.name,
+          role: m.role,
+          department: m.department,
+          status: m.status,
+          manager: m.manager,
+        },
+      });
+      memberMap[m.name] = created.id;
+    }
 
-    const daysActive = calculateDaysActive(startDate, completedDate);
-    const delayHours = calculateDelayHours(targetDueDate, d.target_time, completedDate, d.comp_time, d.status);
-    const onTimeStatus = calculateOnTimeStatus(d.status, targetDueDate, d.target_time, completedDate, d.comp_time);
-    const lifecycleStatus = calculateLifecycleStatus(d.status, onTimeStatus, d.slip_cause, delayHours);
+    // 4. Seed Projects
+    const projectMap: Record<string, string> = {};
+    for (const p of INITIAL_PROJECTS) {
+      const created = await tx.project.create({
+        data: {
+          workspaceId,
+          userId: adminUser.id,
+          title: p.title,
+          priority: p.priority,
+          status: p.status,
+          leadOwner: p.leadOwner,
+          targetDate: p.targetDate ? new Date(p.targetDate) : null,
+        },
+      });
+      projectMap[p.title] = created.id;
+    }
 
-    await prisma.task.create({
-      data: {
-        userId,
-        deliverableId: d.dlv_id,
-        projectId,
-        assigneeId,
-        title: d.title,
-        status: d.status,
-        slipCause: d.slip_cause,
-        startDate,
-        targetDueDate,
-        targetDueTime: d.target_time,
-        completedDate,
-        completedTime: d.comp_time,
-        daysActive,
-        delayHours,
-        onTimeStatus,
-        lifecycleStatus,
-        completedAt: d.status === 'Completed' ? (completedDate || new Date()) : null,
-      }
-    });
-  }
+    // 5. Seed Deliverables
+    for (const d of INITIAL_DELIVERABLES) {
+      const assigneeId = memberMap[d.member] || Object.values(memberMap)[0];
+      const projectId = projectMap[d.project || 'ApxGP'] || Object.values(projectMap)[0];
 
-  console.log(`Successfully seeded ${INITIAL_MEMBERS.length} team members, ${INITIAL_PROJECTS.length} projects, and ${INITIAL_DELIVERABLES.length} deliverables.`);
-  return {
-    membersCount: INITIAL_MEMBERS.length,
-    projectsCount: INITIAL_PROJECTS.length,
-    tasksCount: INITIAL_DELIVERABLES.length,
-  };
+      const startDate = d.start_date ? new Date(d.start_date) : new Date();
+      const targetDueDate = d.target_date ? new Date(d.target_date) : null;
+      const completedDate = d.comp_date ? new Date(d.comp_date) : null;
+
+      const daysActive = calculateDaysActive(startDate, completedDate);
+      const delayHours = calculateDelayHours(targetDueDate, d.target_time, completedDate, d.comp_time, d.status);
+      const onTimeStatus = calculateOnTimeStatus(d.status, targetDueDate, d.target_time, completedDate, d.comp_time);
+      const lifecycleStatus = calculateLifecycleStatus(d.status, onTimeStatus, d.slip_cause, delayHours);
+
+      await tx.task.create({
+        data: {
+          workspaceId,
+          userId: adminUser.id,
+          deliverableId: d.dlv_id,
+          projectId,
+          assigneeId,
+          title: d.title,
+          status: d.status,
+          slipCause: d.slip_cause,
+          startDate,
+          targetDueDate,
+          targetDueTime: d.target_time,
+          completedDate,
+          completedTime: d.comp_time,
+          daysActive,
+          delayHours,
+          onTimeStatus,
+          lifecycleStatus,
+          completedAt: d.status === 'Completed' ? (completedDate || new Date()) : null,
+        },
+      });
+    }
+
+    return {
+      adminUser: { id: adminUser.id, email: adminUser.email },
+      membersCount: INITIAL_MEMBERS.length,
+      projectsCount: INITIAL_PROJECTS.length,
+      tasksCount: INITIAL_DELIVERABLES.length,
+    };
+  });
 }
 
 export const seedDemoData = seedDatabase;

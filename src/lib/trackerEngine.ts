@@ -42,7 +42,6 @@ export function generateNextDeliverableId(existingIds: (string | null | undefine
 export function parseTimeString(timeStr?: string | null): { hours: number; minutes: number; decimalHours: number } {
   if (!timeStr) return { hours: 22, minutes: 0, decimalHours: 22 }; // default 10:00 PM
 
-  // 12-hour format with AM/PM (e.g., "10:00 PM", "07:30 AM")
   const match12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (match12) {
     let hours = parseInt(match12[1], 10);
@@ -53,7 +52,6 @@ export function parseTimeString(timeStr?: string | null): { hours: number; minut
     return { hours, minutes, decimalHours: hours + minutes / 60 };
   }
 
-  // 24-hour format (e.g., "17:00", "09:30")
   const match24 = timeStr.match(/^(\d{1,2}):(\d{2})$/);
   if (match24) {
     const hours = parseInt(match24[1], 10);
@@ -83,7 +81,6 @@ export function formatTimeString(dateInput?: string | Date | null): string {
 
 /**
  * Parses date input and target time slot into a precise, timezone-consistent Date object.
- * Prevents UTC-midnight date shifting.
  */
 export function parseDateWithTime(
   dateInput?: string | Date | null,
@@ -96,7 +93,6 @@ export function parseDateWithTime(
   let day: number;
 
   if (typeof dateInput === 'string') {
-    // Check if ISO format YYYY-MM-DD
     const dateMatch = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (dateMatch) {
       year = parseInt(dateMatch[1], 10);
@@ -141,14 +137,14 @@ export function calculateDaysActive(
 export function filterActiveTasks(tasks: Task[], projects: Project[] = []): Task[] {
   if (!tasks || !Array.isArray(tasks)) return [];
   if (!projects || projects.length === 0) {
-    return tasks.filter((t) => t && t.status !== 'Archived');
+    return tasks.filter((t) => t && t.status !== 'Archived').map(enrichTaskMetrics);
   }
   const archivedProjectIds = new Set(
     projects.filter((p) => p.status === 'Archived').map((p) => p.id)
   );
-  return tasks.filter(
-    (t) => t && !archivedProjectIds.has(t.projectId) && t.status !== 'Archived'
-  );
+  return tasks
+    .filter((t) => t && !archivedProjectIds.has(t.projectId) && t.status !== 'Archived')
+    .map(enrichTaskMetrics);
 }
 
 /**
@@ -230,11 +226,54 @@ export function calculateLifecycleStatus(
 }
 
 /**
+ * Dynamically enriches a task with live real-time delay and lifecycle metrics on-read
+ */
+export function enrichTaskMetrics(task: Task): Task {
+  const targetDate = task.targetDueDate || task.dueDate;
+  const compDate = task.completedDate || task.completedAt;
+
+  const liveDelayHours = calculateDelayHours(
+    targetDate,
+    task.targetDueTime,
+    compDate,
+    task.completedTime,
+    task.status
+  );
+
+  const liveOnTimeStatus = calculateOnTimeStatus(
+    task.status,
+    targetDate,
+    task.targetDueTime,
+    compDate,
+    task.completedTime
+  );
+
+  const liveLifecycleStatus = calculateLifecycleStatus(
+    task.status,
+    liveOnTimeStatus,
+    task.slipCause,
+    liveDelayHours
+  );
+
+  const liveDaysActive = calculateDaysActive(task.startDate, compDate);
+
+  return {
+    ...task,
+    delayHours: liveDelayHours,
+    onTimeStatus: liveOnTimeStatus,
+    lifecycleStatus: liveLifecycleStatus,
+    daysActive: liveDaysActive,
+  };
+}
+
+/**
  * Compute metrics for Team Performance Matrix
  */
 export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): PerformanceData[] {
+  const enrichedTasks = tasks.map(enrichTaskMetrics);
+
   return team.map((member) => {
-    const memberTasks = tasks.filter((t) => t.assigneeId === member.id);
+    const memberTasks = enrichedTasks.filter((t) => t.assigneeId === member.id);
     const activeTasks = memberTasks.filter(
       (t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked'
     ).length;
@@ -254,7 +293,7 @@ export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): Per
     const carriedForward = memberTasks.filter((t) => t.status === 'Carried Forward').length;
     const slipsLogged = memberTasks.filter((t) => t.slipCause && t.slipCause !== 'N/A').length;
 
-    // Performance Rating Rule Reconciliation:
+    // Performance Rating Rule:
     // - Standby: 0 deliverables assigned
     // - Action Required: Any slips logged, any carried forward, or on-time completion rate < 60% with completed work
     // - Top Performer: >= 80% on-time completion rate with at least 2 completed deliverables and zero slips
@@ -288,7 +327,7 @@ export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): Per
 
       // Legacy fields
       completed: completedTasks,
-      overdue: memberTasks.filter((t) => (t.delayHours ?? 0) > 0 && t.status !== 'Completed').length,
+      overdue: memberTasks.filter((t) => (t.delayHours ?? 0) > 0 && t.status !== 'Completed' && t.status !== 'Cancelled').length,
       inProgress: memberTasks.filter((t) => t.status === 'In Progress').length,
       pending: memberTasks.filter((t) => t.status === 'Pending').length,
       total: memberTasks.length,
@@ -304,10 +343,12 @@ export function calculateTeamPerformance(team: TeamMember[], tasks: Task[]): Per
  * Compute Project Performance & Health
  */
 export function calculateProjectPerformance(projects: Project[], tasks: Task[]): ProjectPerformanceData[] {
+  const enrichedTasks = tasks.map(enrichTaskMetrics);
+
   return projects
     .filter((p) => p.status !== 'Archived')
     .map((p) => {
-      const pTasks = tasks.filter((t) => t.projectId === p.id);
+      const pTasks = enrichedTasks.filter((t) => t.projectId === p.id);
       const activeTasks = pTasks.filter(
         (t) => t.status === 'In Progress' || t.status === 'Carried Forward' || t.status === 'Blocked'
       ).length;
@@ -337,17 +378,19 @@ export function calculateProjectPerformance(projects: Project[], tasks: Task[]):
 }
 
 /**
- * Global Task Metrics Counter
+ * Global Task Metrics Counter with live overdue evaluation
  */
 export function calculateGlobalTaskMetrics(tasks: Task[]): TaskMetrics {
-  const total = tasks.length;
-  const completed = tasks.filter((t) => t.status === 'Completed').length;
-  const inProgress = tasks.filter((t) => t.status === 'In Progress').length;
-  const carriedForward = tasks.filter((t) => t.status === 'Carried Forward').length;
-  const blocked = tasks.filter((t) => t.status === 'Blocked').length;
-  const cancelled = tasks.filter((t) => t.status === 'Cancelled').length;
-  const overdue = tasks.filter((t) => (t.delayHours ?? 0) > 0 && t.status !== 'Completed' && t.status !== 'Cancelled').length;
-  const pending = tasks.filter((t) => t.status === 'Pending').length;
+  const enrichedTasks = tasks.map(enrichTaskMetrics);
+
+  const total = enrichedTasks.length;
+  const completed = enrichedTasks.filter((t) => t.status === 'Completed').length;
+  const inProgress = enrichedTasks.filter((t) => t.status === 'In Progress').length;
+  const carriedForward = enrichedTasks.filter((t) => t.status === 'Carried Forward').length;
+  const blocked = enrichedTasks.filter((t) => t.status === 'Blocked').length;
+  const cancelled = enrichedTasks.filter((t) => t.status === 'Cancelled').length;
+  const overdue = enrichedTasks.filter((t) => (t.delayHours ?? 0) > 0 && t.status !== 'Completed' && t.status !== 'Cancelled').length;
+  const pending = enrichedTasks.filter((t) => t.status === 'Pending').length;
 
   return {
     total,

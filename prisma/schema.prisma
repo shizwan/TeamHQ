@@ -4,30 +4,63 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         String    @default("MEMBER") // 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER'
+  active       Boolean   @default(true)
+  workspaceId  String    @default("default-workspace")
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+model Workspace {
+  id          String       @id @default("default-workspace")
+  name        String       @default("TeamHQ Workspace")
+  slug        String       @unique @default("teamhq")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  users       User[]
+  teamMembers TeamMember[]
+  projects    Project[]
+  tasks       Task[]
+  activity    ActivityLog[]
 }
 
 model TeamMember {
-  id         String   @id @default(uuid())
-  userId     String   @default("admin-user")
-  name       String
-  role       String
-  department String?
-  status     String   @default("Active") // 'Active' | 'Inactive'
-  manager    String?  @default("Shizwan")
-  createdAt  DateTime @default(now())
-  tasks      Task[]   @relation("TeamMemberTasks")
+  id          String    @id @default(uuid())
+  workspaceId String    @default("default-workspace")
+  userId      String?   @default("admin-user")
+  name        String
+  role        String
+  department  String?
+  status      String    @default("Active") // 'Active' | 'Inactive'
+  manager     String?   @default("Shizwan")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  tasks       Task[]     @relation("TeamMemberTasks")
+
+  @@index([workspaceId])
+  @@index([status])
 }
 
 model Project {
   id          String    @id @default(uuid())
+  workspaceId String    @default("default-workspace")
   userId      String    @default("admin-user")
   title       String
   description String?
@@ -37,12 +70,19 @@ model Project {
   startDate   DateTime?
   targetDate  DateTime?
   createdAt   DateTime  @default(now())
-  tasks       Task[]    @relation("ProjectTasks")
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  tasks       Task[]     @relation("ProjectTasks")
+
+  @@index([workspaceId])
+  @@index([status])
 }
 
 model Task {
   id              String    @id @default(uuid())
   deliverableId   String?   // e.g. DLV-000001
+  workspaceId     String    @default("default-workspace")
   userId          String    @default("admin-user")
   projectId       String
   assigneeId      String
@@ -51,7 +91,6 @@ model Task {
   slipCause       String?   @default("N/A") // 'N/A' | 'Developer' | 'Dependency' | 'Scope Drift' | 'Environment/QA' | 'Unplanned Task'
   startDate       DateTime?
   targetDueDate   DateTime?
-  dueDate         DateTime?
   targetDueTime   String?   @default("10:00 PM") // ETA (01:00 PM to 10:00 PM)
   completedDate   DateTime?
   completedTime   String?   // 01:00 PM to 10:00 PM
@@ -65,12 +104,21 @@ model Task {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  project  Project    @relation("ProjectTasks", fields: [projectId], references: [id], onDelete: Cascade)
-  assignee TeamMember @relation("TeamMemberTasks", fields: [assigneeId], references: [id], onDelete: Cascade)
+  workspace Workspace?  @relation(fields: [workspaceId], references: [id])
+  project   Project     @relation("ProjectTasks", fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  TeamMember  @relation("TeamMemberTasks", fields: [assigneeId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([targetDueDate])
+  @@index([deliverableId])
 }
 
 model ActivityLog {
   id          String   @id @default(uuid())
+  workspaceId String   @default("default-workspace")
   userId      String   @default("admin-user")
   actorName   String   @default("Shizwan")
   actorEmail  String?  @default("shizwan@teamhq.io")
@@ -81,5 +129,10 @@ model ActivityLog {
   details     String?
   metadata    String?  // JSON string
   createdAt   DateTime @default(now())
-}
 
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([entityType])
+  @@index([createdAt])
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useCallback } from 'react';
-import { AlertTriangle, Trash2, Loader2, Archive, ArchiveRestore } from 'lucide-react';
+import { AlertTriangle, Trash2, Loader2, Archive, ArchiveRestore, CheckCircle2, ArrowRightLeft } from 'lucide-react';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -9,7 +9,7 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'danger' | 'warning' | 'archive' | 'unarchive';
+  variant?: 'danger' | 'warning' | 'archive' | 'unarchive' | 'success' | 'info';
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
@@ -44,6 +44,20 @@ const VARIANT_CONFIG = {
     confirmBg:
       'bg-indigo-600 hover:bg-indigo-700 focus-visible:outline-indigo-600',
   },
+  success: {
+    icon: CheckCircle2,
+    iconBg: 'bg-emerald-100',
+    iconColor: 'text-emerald-600',
+    confirmBg:
+      'bg-emerald-600 hover:bg-emerald-700 focus-visible:outline-emerald-600',
+  },
+  info: {
+    icon: ArrowRightLeft,
+    iconBg: 'bg-blue-100',
+    iconColor: 'text-blue-600',
+    confirmBg:
+      'bg-blue-600 hover:bg-blue-700 focus-visible:outline-blue-600',
+  },
 } as const;
 
 export default function ConfirmDialog({
@@ -59,7 +73,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
-  const config = VARIANT_CONFIG[variant];
+  const config = VARIANT_CONFIG[variant] || VARIANT_CONFIG.danger;
   const Icon = config.icon;
 
   // Focus the cancel button when the dialog opens
@@ -146,7 +160,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
           >
             {cancelLabel}
           </button>
@@ -154,7 +168,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${config.confirmBg}`}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer ${config.confirmBg}`}
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {confirmLabel}

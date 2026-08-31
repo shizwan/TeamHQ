@@ -38,6 +38,8 @@ export default function DeadlinesPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
+  const [statusChangeTarget, setStatusChangeTarget] = useState<{ task: Task; newStatus: TaskStatus } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [nowTime, setNowTime] = useState<number>(() => Date.now());
   const [activeTab, setActiveTab] = React.useState<'overdue' | 'today' | 'week' | 'upcoming'>('overdue');
 
@@ -67,22 +69,43 @@ export default function DeadlinesPage() {
   }, [activeProjects]);
 
   const handleStatusChange = useCallback(
-    async (taskId: string, newStatus: TaskStatus) => {
-      const updateData: Partial<Task> = {
-        status: newStatus,
-      };
-
-      const success = await updateDocument(taskId, updateData);
-
-      if (success) {
-        addToast('info', 'Status updated', `Task marked as "${newStatus}".`);
-        refetchTasks();
-      } else {
-        addToast('error', 'Failed to update status', 'Please try again.');
-      }
+    (taskId: string, newStatus: TaskStatus) => {
+      const target = tasks.find((t) => t.id === taskId);
+      if (!target || target.status === newStatus) return;
+      setStatusChangeTarget({ task: target, newStatus });
     },
-    [updateDocument, addToast, refetchTasks]
+    [tasks]
   );
+
+  const handleConfirmStatusChange = useCallback(async () => {
+    if (!statusChangeTarget) return;
+    const { task, newStatus } = statusChangeTarget;
+    setUpdatingStatus(true);
+
+    const updateData: Partial<Task> = {
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (newStatus === 'Completed') {
+      updateData.completedAt = new Date().toISOString();
+    } else {
+      updateData.completedAt = null;
+    }
+
+    try {
+      const success = await updateDocument(task.id, updateData);
+      if (success) {
+        addToast('success', 'Status updated', `"${task.title}" status changed to ${newStatus}.`);
+        refetchTasks();
+      }
+    } catch {
+      addToast('error', 'Failed to update status', 'Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+      setStatusChangeTarget(null);
+    }
+  }, [statusChangeTarget, updateDocument, addToast, refetchTasks]);
 
   const handleEditTask = useCallback(
     async (taskId: string, data: Partial<Task>) => {
@@ -316,6 +339,23 @@ export default function DeadlinesPage() {
         <Calendar className="w-8 h-8 text-indigo-500" />, 
         'No upcoming tasks scheduled yet.'
       )}
+
+      {/* Status Change Confirmation Pop-up */}
+      <ConfirmDialog
+        open={!!statusChangeTarget}
+        title="Change Deliverable Status?"
+        description={
+          statusChangeTarget?.newStatus === 'Completed'
+            ? `Mark "${statusChangeTarget?.task.title}" as Completed? This will record the completion timestamp and compute SLA metrics.`
+            : `Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`
+        }
+        confirmLabel={`Change to ${statusChangeTarget?.newStatus || 'Status'}`}
+        cancelLabel="Cancel"
+        variant={statusChangeTarget?.newStatus === 'Completed' ? 'success' : statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
+        onConfirm={handleConfirmStatusChange}
+        onCancel={() => setStatusChangeTarget(null)}
+        loading={updatingStatus}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

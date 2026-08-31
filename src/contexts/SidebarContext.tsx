@@ -12,7 +12,6 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     try {
@@ -20,8 +19,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       if (saved !== null) {
         setIsCollapsed(saved === 'true');
       }
-    } catch (e) {}
-    setMounted(true);
+    } catch {
+      // Ignore localstorage read error
+    }
   }, []);
 
   const toggleCollapse = useCallback(() => {
@@ -29,7 +29,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       const next = !prev;
       try {
         localStorage.setItem('teamhq_sidebar_collapsed', String(next));
-      } catch (e) {}
+      } catch {
+        // Ignore localstorage write error
+      }
       return next;
     });
   }, []);
@@ -38,11 +40,13 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     setIsCollapsed(collapsed);
     try {
       localStorage.setItem('teamhq_sidebar_collapsed', String(collapsed));
-    } catch (e) {}
+    } catch {
+      // Ignore localstorage write error
+    }
   }, []);
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed: mounted ? isCollapsed : false, toggleCollapse, setCollapsed }}>
+    <SidebarContext.Provider value={{ isCollapsed, toggleCollapse, setCollapsed }}>
       {children}
     </SidebarContext.Provider>
   );

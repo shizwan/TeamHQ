@@ -36,9 +36,12 @@ yarn-error.log*
 next-env.d.ts
 
 # database
+prisma/dev.db
 prisma/dev.db-journal
+*.db
+*.db-journal
 
-# scratch / test files
+# test / scratch files
 test_prisma.ts
 audit_metrics.ts
 

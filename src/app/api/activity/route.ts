@@ -1,116 +1,120 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLogger';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, badRequestResponse, forbiddenResponse, serverErrorResponse } from '@/lib/auth';
+import { ActivityQuerySchema } from '@/lib/validation/schemas';
+import { logActivity } from '@/lib/services/activityService';
+import { validateCsrf } from '@/lib/security';
 
-export const dynamic = 'force-dynamic';
-
-export async function GET(req: Request) {
-  // 1. Enforce server-side authentication
-  const auth = await requireAuth(req);
-  if (!auth) {
-    return unauthorizedResponse();
-  }
+export async function GET(request: Request) {
+  const authResult = await requireAuth(request, 'activity:view');
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
-    const { searchParams } = new URL(req.url);
-    const entityType = searchParams.get('entityType');
-    const action = searchParams.get('action');
-    const search = searchParams.get('search')?.trim();
-    const limit = searchParams.get('limit') ? Math.min(Math.max(parseInt(searchParams.get('limit')!, 10), 1), 500) : 200;
+    const { searchParams } = new URL(request.url);
+    const entityType = searchParams.get('entityType') || undefined;
+    const action = searchParams.get('action') || undefined;
+    const search = searchParams.get('search') || undefined;
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '500', 10);
 
-    // 2. Scope strictly to the authenticated user/tenant
     const where: any = {
-      userId: auth.user.uid,
+      workspaceId: authResult.user.workspaceId,
     };
 
-    if (entityType && entityType !== 'all') {
-      where.entityType = entityType;
-    }
-    if (action && action !== 'all') {
-      where.action = action;
-    }
+    if (entityType && entityType !== 'all') where.entityType = entityType;
+    if (action && action !== 'all') where.action = action;
 
-    // 3. Use structured AND condition for search to avoid overriding tenant/filter constraints
-    if (search) {
-      where.AND = [
-        {
-          OR: [
-            { entityTitle: { contains: search } },
-            { details: { contains: search } },
-            { actorName: { contains: search } },
-          ],
-        },
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { entityTitle: { contains: q } },
+        { details: { contains: q } },
+        { actorName: { contains: q } },
       ];
     }
 
-    const logs = await prisma.activityLog.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+    const [total, rawLogs] = await Promise.all([
+      prisma.activityLog.count({ where }),
+      prisma.activityLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
 
-    return NextResponse.json(logs);
-  } catch (error) {
-    console.error('Failed to fetch activity logs:', error);
-    return NextResponse.json({ error: 'Failed to fetch activity logs' }, { status: 500 });
-  }
-}
+    const logs = rawLogs.map((log) => ({
+      id: log.id,
+      userId: log.userId,
+      actorName: log.actorName,
+      actorEmail: log.actorEmail,
+      action: log.action,
+      entityType: log.entityType,
+      entityId: log.entityId,
+      entityTitle: log.entityTitle,
+      details: log.details,
+      metadata: log.metadata,
+      createdAt: log.createdAt.toISOString(),
+    }));
 
-export async function POST(req: Request) {
-  // 1. Enforce server-side authentication
-  const auth = await requireAuth(req);
-  if (!auth) {
-    return unauthorizedResponse();
-  }
-
-  try {
-    const body = await req.json();
-    const log = await logActivity({
-      ...body,
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-    });
-
-    if (!log) {
-      return NextResponse.json({ error: 'Failed to create activity log' }, { status: 500 });
+    // If default full list requested, return array for backward compatibility
+    if (limit >= 500 && !searchParams.has('page')) {
+      return NextResponse.json(logs);
     }
-    return NextResponse.json(log);
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to create activity log' }, { status: 500 });
-  }
-}
 
-export async function DELETE(req: Request) {
-  // 1. Enforce server-side authentication
-  const auth = await requireAuth(req);
-  if (!auth) {
-    return unauthorizedResponse();
-  }
-
-  try {
-    // 2. Delete ONLY records belonging to the authenticated user/tenant
-    await prisma.activityLog.deleteMany({
-      where: {
-        userId: auth.user.uid,
+    return NextResponse.json({
+      logs,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     });
+  } catch (error) {
+    console.error('[GET ACTIVITY LOGS ERROR]', error);
+    return serverErrorResponse('Failed to fetch activity logs');
+  }
+}
 
-    // 3. Record an audit milestone for the log purge
-    await logActivity({
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-      action: 'deleted',
-      entityType: 'system',
-      entityTitle: 'Audit Log Purge',
-      details: `Activity audit trail cleared by ${auth.user.displayName} (${auth.user.email}).`,
+/**
+ * Audit log truncation is restricted strictly to ADMIN roles with CSRF protection and an audit record
+ */
+export async function DELETE(request: Request) {
+  const authResult = await requireAuth(request, 'activity:clear');
+  if (authResult instanceof NextResponse) return authResult;
+
+  if (!validateCsrf(request)) {
+    return badRequestResponse('CSRF validation failed');
+  }
+
+  // Only ADMIN can clear activity logs
+  if (authResult.user.role !== 'ADMIN') {
+    return forbiddenResponse('Only Administrators can clear activity audit records');
+  }
+
+  try {
+    const workspaceId = authResult.user.workspaceId;
+
+    await prisma.activityLog.deleteMany({
+      where: { workspaceId },
     });
 
-    return NextResponse.json({ success: true, message: 'All activity logs cleared successfully.' });
+    // Record the truncation action itself
+    await logActivity({
+      workspaceId,
+      userId: authResult.user.uid,
+      actorName: authResult.user.displayName,
+      actorEmail: authResult.user.email,
+      action: 'deleted',
+      entityType: 'system',
+      entityTitle: 'Audit Logs Truncated',
+      details: `Audit trail history was cleared by administrator ${authResult.user.displayName}.`,
+    });
+
+    return NextResponse.json({ success: true, message: 'Activity logs cleared successfully' });
   } catch (error) {
-    console.error('Failed to clear activity logs:', error);
-    return NextResponse.json({ error: 'Failed to clear activity logs' }, { status: 500 });
+    console.error('[DELETE ACTIVITY LOGS ERROR]', error);
+    return serverErrorResponse('Failed to clear activity logs');
   }
 }

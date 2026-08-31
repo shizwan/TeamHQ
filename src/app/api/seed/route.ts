@@ -1,44 +1,44 @@
 import { NextResponse } from 'next/server';
 import { seedDatabase } from '@/lib/seedData';
-import { getSessionUser } from '@/lib/auth';
+import { requireAuth, forbiddenResponse, badRequestResponse } from '@/lib/auth';
+import { isProduction } from '@/lib/env';
 
-export const dynamic = 'force-dynamic';
+/**
+ * GET method is permanently disabled to prevent accidental browser prefetch database wipes.
+ */
+export async function GET() {
+  return NextResponse.json(
+    {
+      error: 'Method Not Allowed: Database seeding via GET is disabled for security. Use CLI "npm run seed" or POST with Admin authorization.',
+      code: 'METHOD_NOT_ALLOWED',
+    },
+    { status: 405 }
+  );
+}
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'teamhq-dev-secret';
-
-async function handleSeed(req: Request) {
-  // 1. Strict production block: Never allow database wiping in production
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json(
-      { error: 'Endpoint disabled in production environment' },
-      { status: 403 }
-    );
-  }
-
-  // 2. In development, require either an active authenticated session or secret header
-  const authHeader = req.headers.get('x-admin-secret');
-  const user = await getSessionUser(req);
-
-  if (authHeader !== ADMIN_SECRET && (!user || user.role !== 'admin')) {
-    return NextResponse.json(
-      { error: 'Forbidden: Admin authorization required to seed database' },
-      { status: 403 }
-    );
+/**
+ * POST method allows administrative re-seeding only when explicitly authorized by an ADMIN.
+ */
+export async function POST(request: Request) {
+  // In production, require strict ADMIN authentication
+  if (isProduction()) {
+    const authResult = await requireAuth(request, 'system:admin');
+    if (authResult instanceof NextResponse) return authResult;
   }
 
   try {
-    const result = await seedDatabase();
-    return NextResponse.json({ success: true, message: 'Database seeded successfully', ...result });
+    const body = await request.json().catch(() => ({}));
+    const adminEmail = body.adminEmail || process.env.ADMIN_EMAIL || 'admin@teamhq.com';
+    const adminPassword = body.adminPassword || process.env.ADMIN_PASSWORD || 'password';
+
+    const result = await seedDatabase(adminEmail, adminPassword);
+    return NextResponse.json({
+      success: true,
+      message: 'Database seeded successfully',
+      result,
+    });
   } catch (error: any) {
-    console.error('Seed API error:', error);
-    return NextResponse.json({ error: 'Failed to seed database', details: error.message }, { status: 500 });
+    console.error('[SEED ERROR]', error);
+    return badRequestResponse(error.message || 'Seeding failed');
   }
-}
-
-export async function GET(req: Request) {
-  return handleSeed(req);
-}
-
-export async function POST(req: Request) {
-  return handleSeed(req);
 }

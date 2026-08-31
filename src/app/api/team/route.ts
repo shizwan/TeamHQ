@@ -1,63 +1,51 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLogger';
-import { requireAuth, unauthorizedResponse } from '@/lib/auth';
+import { requireAuth, badRequestResponse, serverErrorResponse } from '@/lib/auth';
+import { getTeamMembers, createTeamMember } from '@/lib/services/teamService';
+import { CreateMemberSchema } from '@/lib/validation/schemas';
+import { validateCsrf } from '@/lib/security';
 
-export const dynamic = 'force-dynamic';
-
-export async function GET(req: Request) {
-  const auth = await requireAuth(req);
-  if (!auth) return unauthorizedResponse();
+export async function GET(request: Request) {
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
-    const team = await prisma.teamMember.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-    return NextResponse.json(team);
+    const { searchParams } = new URL(request.url);
+    const includeInactive = searchParams.get('includeInactive') !== 'false';
+
+    const members = await getTeamMembers(authResult.user.workspaceId, includeInactive);
+    return NextResponse.json(members);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch team' }, { status: 500 });
+    console.error('[GET TEAM ERROR]', error);
+    return serverErrorResponse('Failed to fetch team members');
   }
 }
 
-export async function POST(req: Request) {
-  const auth = await requireAuth(req);
-  if (!auth) return unauthorizedResponse();
+export async function POST(request: Request) {
+  const authResult = await requireAuth(request, 'team:manage');
+  if (authResult instanceof NextResponse) return authResult;
+
+  if (!validateCsrf(request)) {
+    return badRequestResponse('CSRF validation failed');
+  }
 
   try {
-    const body = await req.json();
+    const body = await request.json().catch(() => ({}));
+    const parseResult = CreateMemberSchema.safeParse(body);
 
-    const name = (body.name || '').trim();
-    const role = (body.role || '').trim();
-    if (!name || !role) {
-      return NextResponse.json({ error: 'Name and role are required' }, { status: 400 });
+    if (!parseResult.success) {
+      return badRequestResponse('Validation failed', parseResult.error.flatten().fieldErrors);
     }
 
-    const member = await prisma.teamMember.create({
-      data: {
-        userId: auth.user.uid,
-        name,
-        role,
-        department: body.department || '',
-        status: body.status || 'Active',
-        manager: body.manager || 'Shizwan',
-      },
+    const created = await createTeamMember(parseResult.data, {
+      uid: authResult.user.uid,
+      displayName: authResult.user.displayName,
+      email: authResult.user.email,
+      workspaceId: authResult.user.workspaceId,
     });
 
-    logActivity({
-      userId: auth.user.uid,
-      actorName: auth.user.displayName,
-      actorEmail: auth.user.email,
-      action: 'created',
-      entityType: 'team_member',
-      entityId: member.id,
-      entityTitle: member.name,
-      details: `Added ${member.name} as ${member.role}${member.department ? ` (${member.department})` : ''}.`,
-      metadata: { role: member.role, department: member.department },
-    }).catch((err) => console.error('Activity log error:', err));
-
-    return NextResponse.json(member);
-  } catch (error) {
-    console.error('Failed to create team member:', error);
-    return NextResponse.json({ error: 'Failed to create member', details: String(error) }, { status: 500 });
+    return NextResponse.json(created, { status: 201 });
+  } catch (error: any) {
+    console.error('[CREATE TEAM MEMBER ERROR]', error);
+    return badRequestResponse(error.message || 'Failed to add team member');
   }
 }

@@ -1,100 +1,117 @@
 'use client';
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection, useAddDoc, useUpdateDoc, useDeleteDoc } from '@/hooks/useFirestore';
-import { getTeamCollectionPath, getTasksCollectionPath, getProjectsCollectionPath } from '@/lib/firestorePaths';
+import { getTasksCollectionPath, getProjectsCollectionPath, getTeamCollectionPath } from '@/lib/firestorePaths';
 import { useToast } from '@/contexts/ToastContext';
-import { sanitizeString } from '@/lib/validation';
 import { filterActiveTasks } from '@/lib/trackerEngine';
-import type { TeamMember, Task, Project, TaskStatus, NewTaskForm } from '@/types';
+import type { Task, Project, TeamMember, TaskStatus } from '@/types';
 import Header from '@/components/layout/Header';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TaskGrid from '@/components/tasks/TaskGrid';
-import AddTaskForm from '@/components/tasks/AddTaskForm';
+import AddTaskModal from '@/components/tasks/AddTaskModal';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
 import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 export default function TasksPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const userId = user?.uid || '';
 
-  const teamPath = userId ? getTeamCollectionPath(userId) : null;
-  const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
   const tasksPath = userId ? getTasksCollectionPath(userId) : null;
+  const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
+  const teamPath = userId ? getTeamCollectionPath(userId) : null;
 
-  const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
-  const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
-  
-  const { addDocument: addTask, loading: addingTask } = useAddDoc(tasksPath);
-  const { updateDocument } = useUpdateDoc(tasksPath);
+  const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
+  const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
+
+  const { addDocument, loading: addingTask } = useAddDoc(tasksPath);
+  const { updateDocument, loading: updatingTask } = useUpdateDoc(tasksPath);
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
 
-  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
-  const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
-  const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [statusChangeTarget, setStatusChangeTarget] = useState<{ task: Task; newStatus: TaskStatus } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Derive active unarchived tasks & projects
-  const activeProjects = useMemo(() => projects.filter(p => p.status === 'Active'), [projects]);
-  const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
+  const activeProjects = useMemo(
+    () => projects.filter((p) => p.status !== 'Archived'),
+    [projects]
+  );
+
+  const activeTasks = useMemo(
+    () => filterActiveTasks(tasks, projects),
+    [tasks, projects]
+  );
 
   const handleAddTask = useCallback(
-    async (data: NewTaskForm) => {
+    async (taskData: Partial<Task>) => {
       try {
-        const result = await addTask({
-          ...data,
-          userId: userId || 'admin-user',
-        });
-
-        if (result) {
-          addToast('success', 'Deliverable created', `"${data.title}" has been added.`);
+        const id = await addDocument(taskData);
+        if (id) {
+          addToast('success', 'Task created', `"${taskData.title}" has been created.`);
+          setIsAddModalOpen(false);
           refetchTasks();
-        } else {
-          addToast('error', 'Failed to create deliverable', 'Please try again.');
         }
-      } catch (err: any) {
-        console.error('Error creating deliverable:', err);
-        addToast('error', 'Failed to create deliverable', err?.message || 'Please try again.');
-        throw err;
+      } catch {
+        addToast('error', 'Failed to create task', 'Please try again later.');
       }
     },
-    [addTask, addToast, refetchTasks, userId]
+    [addDocument, addToast, refetchTasks]
   );
 
+  // Trigger Confirmation Pop-up on Status Change
   const handleStatusChange = useCallback(
-    async (taskId: string, newStatus: TaskStatus) => {
-      const updateData: Partial<Task> = {
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (newStatus === 'Completed') {
-        updateData.completedAt = new Date().toISOString();
-      } else {
-        updateData.completedAt = null;
-      }
-
-      const success = await updateDocument(taskId, updateData);
-
-      if (success) {
-        addToast('info', 'Status updated', `Task marked as "${newStatus}".`);
-        refetchTasks();
-      } else {
-        addToast('error', 'Failed to update status', 'Please try again.');
-      }
+    (taskId: string, newStatus: TaskStatus) => {
+      const target = tasks.find((t) => t.id === taskId);
+      if (!target || target.status === newStatus) return;
+      setStatusChangeTarget({ task: target, newStatus });
     },
-    [updateDocument, addToast, refetchTasks]
+    [tasks]
   );
+
+  const handleConfirmStatusChange = useCallback(async () => {
+    if (!statusChangeTarget) return;
+    const { task, newStatus } = statusChangeTarget;
+    setUpdatingStatus(true);
+
+    const updateData: Partial<Task> = {
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (newStatus === 'Completed') {
+      updateData.completedAt = new Date().toISOString();
+    } else {
+      updateData.completedAt = null;
+    }
+
+    try {
+      const success = await updateDocument(task.id, updateData);
+      if (success) {
+        addToast('success', 'Status updated', `"${task.title}" status changed to ${newStatus}.`);
+        refetchTasks();
+      }
+    } catch {
+      addToast('error', 'Failed to update status', 'Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+      setStatusChangeTarget(null);
+    }
+  }, [statusChangeTarget, updateDocument, addToast, refetchTasks]);
 
   const handleEditTask = useCallback(
-    async (taskId: string, data: Partial<Task>) => {
-      const success = await updateDocument(taskId, data);
+    async (taskId: string, taskData: Partial<Task>) => {
+      const success = await updateDocument(taskId, taskData);
       if (success) {
-        addToast('success', 'Task updated', 'The task has been modified.');
-        setEditTaskTarget(null);
+        addToast('success', 'Task updated', `"${taskData.title || 'Task'}" has been updated.`);
+        setEditingTask(null);
         refetchTasks();
       } else {
         addToast('error', 'Failed to update task', 'Please try again later.');
@@ -112,11 +129,11 @@ export default function TasksPage() {
         addToast('success', 'Task deleted', `"${deleteTarget.title}" has been removed.`);
         refetchTasks();
       }
-    } catch (error) {
+    } catch {
       addToast('error', 'Failed to delete task', 'Please try again.');
     }
     setDeleteTarget(null);
-  }, [deleteTarget, deleteDocument, addToast]);
+  }, [deleteTarget, deleteDocument, addToast, refetchTasks]);
 
   const handleRequestDelete = useCallback((id: string, title: string) => {
     setDeleteTarget({ id, title });
@@ -128,66 +145,99 @@ export default function TasksPage() {
 
   return (
     <>
-      <Header
-        title="Task Execution Board"
-        description="Global view of all tasks across all projects."
-      />
-
-      <div className="mb-6">
-        {activeProjects.length > 0 ? (
-          <AddTaskForm 
-            projects={activeProjects} 
-            team={team} 
-            onSubmit={handleAddTask} 
-            loading={addingTask} 
-          />
-        ) : (
-          <div className="bg-amber-50 text-amber-800 p-4 rounded-lg border border-amber-200 text-sm">
-            You must create an Active project before you can assign tasks. Head over to the Projects tab to get started.
-          </div>
-        )}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <Header
+          title="All Deliverables"
+          description={`Viewing all active deliverables (${activeTasks.length} total)`}
+        />
+        <button
+          onClick={() => setIsAddModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add Deliverable
+        </button>
       </div>
 
-      <TaskGrid
-        tasks={activeTasks}
+      {activeProjects.length === 0 ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center text-amber-800">
+          <p className="font-semibold text-sm">No active projects available</p>
+          <p className="text-xs text-amber-600 mt-1">
+            You need at least one active project before creating deliverables. Head over to the Projects tab to create one.
+          </p>
+        </div>
+      ) : (
+        <TaskGrid
+          tasks={activeTasks}
+          projects={activeProjects}
+          team={team}
+          onStatusChange={handleStatusChange}
+          onEdit={(task) => setEditingTask(task)}
+          onDelete={handleRequestDelete}
+          onPreview={(task) => setPreviewTask(task)}
+        />
+      )}
+
+      {/* Add Task Modal */}
+      <AddTaskModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
         projects={activeProjects}
         team={team}
-        onStatusChange={handleStatusChange}
-        onEdit={setEditTaskTarget}
-        onDelete={handleRequestDelete}
-        onPreview={setPreviewTaskTarget}
+        onSubmit={handleAddTask}
+        loading={addingTask}
       />
 
+      {/* Edit Task Modal */}
+      <EditTaskModal
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        task={editingTask}
+        projects={activeProjects}
+        team={team}
+        onSubmit={handleEditTask}
+        loading={updatingTask}
+      />
+
+      {/* Task Preview Modal */}
       <TaskPreviewModal
-        isOpen={!!previewTaskTarget}
-        onClose={() => setPreviewTaskTarget(null)}
-        task={previewTaskTarget}
+        isOpen={!!previewTask}
+        onClose={() => setPreviewTask(null)}
+        task={previewTask}
         projects={activeProjects}
         team={team}
-        onEdit={setEditTaskTarget}
+        onEdit={(task) => setEditingTask(task)}
         onDelete={handleRequestDelete}
         onStatusChange={handleStatusChange}
       />
 
+      {/* Status Change Confirmation Pop-up */}
+      <ConfirmDialog
+        open={!!statusChangeTarget}
+        title="Change Deliverable Status?"
+        description={
+          statusChangeTarget?.newStatus === 'Completed'
+            ? `Mark "${statusChangeTarget?.task.title}" as Completed? This will record the completion timestamp and compute SLA metrics.`
+            : `Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`
+        }
+        confirmLabel={`Change to ${statusChangeTarget?.newStatus || 'Status'}`}
+        cancelLabel="Cancel"
+        variant={statusChangeTarget?.newStatus === 'Completed' ? 'success' : statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
+        onConfirm={handleConfirmStatusChange}
+        onCancel={() => setStatusChangeTarget(null)}
+        loading={updatingStatus}
+      />
+
+      {/* Delete Confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
-        title="Delete this task?"
-        description={`"${deleteTarget?.title}" will be permanently deleted. This action cannot be undone.`}
-        confirmLabel="Delete Task"
+        title="Delete Deliverable?"
+        description={`"${deleteTarget?.title}" will be permanently removed. This action cannot be undone.`}
+        confirmLabel="Delete Deliverable"
         variant="danger"
         onConfirm={handleDeleteTask}
         onCancel={() => setDeleteTarget(null)}
         loading={deletingTask}
-      />
-
-      <EditTaskModal
-        isOpen={!!editTaskTarget}
-        onClose={() => setEditTaskTarget(null)}
-        task={editTaskTarget}
-        projects={activeProjects}
-        team={team}
-        onSubmit={handleEditTask}
-        loading={false}
       />
     </>
   );
