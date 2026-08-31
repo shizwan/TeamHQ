@@ -18,6 +18,7 @@ import {
   Kanban,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
 interface NavItem {
   label: string;
@@ -39,6 +40,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   const toggleMobile = useCallback(() => {
     setMobileOpen((prev) => !prev);
@@ -69,7 +71,7 @@ export default function Sidebar() {
         <button
           type="button"
           onClick={closeMobile}
-          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white md:hidden"
+          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white md:hidden cursor-pointer"
           aria-label="Close navigation menu"
         >
           <X className="h-5 w-5" />
@@ -114,8 +116,8 @@ export default function Sidebar() {
         </div>
         <button
           type="button"
-          onClick={signOut}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          onClick={() => setShowSignOutConfirm(true)}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white cursor-pointer"
           aria-label="Sign out"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -168,6 +170,20 @@ export default function Sidebar() {
       >
         {sidebarContent}
       </aside>
+
+      <ConfirmDialog
+        open={showSignOutConfirm}
+        title="Sign out of TeamHQ?"
+        description="Are you sure you want to sign out? You will need to log back in to access your dashboard."
+        confirmLabel="Sign Out"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={() => {
+          setShowSignOutConfirm(false);
+          signOut();
+        }}
+        onCancel={() => setShowSignOutConfirm(false)}
+      />
     </>
   );
 }

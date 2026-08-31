@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/layout/Sidebar';
+import GlobalSearch from '@/components/search/GlobalSearch';
 import ToastContainer from '@/components/ui/Toast';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -39,6 +40,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <main className="flex-1 md:ml-64 min-h-screen" suppressHydrationWarning>
         <div className="p-4 md:p-8 max-w-7xl mx-auto pb-12" suppressHydrationWarning>
+          <GlobalSearch />
           {children}
         </div>
       </main>

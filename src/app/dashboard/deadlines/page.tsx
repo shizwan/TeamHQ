@@ -9,6 +9,7 @@ import { filterActiveTasks } from '@/lib/trackerEngine';
 import type { TeamMember, Task, TaskStatus, Project } from '@/types';
 import Header from '@/components/layout/Header';
 import TaskCard from '@/components/tasks/TaskCard';
+import EditTaskModal from '@/components/tasks/EditTaskModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Calendar, AlertCircle, Clock, CalendarDays } from 'lucide-react';
@@ -27,13 +28,14 @@ export default function DeadlinesPage() {
   const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
 
   const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
-  const { data: tasks, loading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
   
   const { updateDocument } = useUpdateDoc(tasksPath);
   const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
 
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
+  const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [nowTime, setNowTime] = useState<number>(() => new Date('2026-08-28T00:00:00.000Z').getTime());
   const [activeTab, setActiveTab] = React.useState<'overdue' | 'today' | 'week' | 'upcoming'>('overdue');
 
@@ -78,11 +80,26 @@ export default function DeadlinesPage() {
 
       if (success) {
         addToast('info', 'Status updated', `Task marked as "${newStatus}".`);
+        refetchTasks();
       } else {
         addToast('error', 'Failed to update status', 'Please try again.');
       }
     },
-    [updateDocument, addToast]
+    [updateDocument, addToast, refetchTasks]
+  );
+
+  const handleEditTask = useCallback(
+    async (taskId: string, data: Partial<Task>) => {
+      const success = await updateDocument(taskId, data);
+      if (success) {
+        addToast('success', 'Task updated', 'The task has been modified.');
+        setEditTaskTarget(null);
+        refetchTasks();
+      } else {
+        addToast('error', 'Failed to update task', 'Please try again later.');
+      }
+    },
+    [updateDocument, addToast, refetchTasks]
   );
 
   const handleDeleteTask = useCallback(async () => {
@@ -91,11 +108,12 @@ export default function DeadlinesPage() {
     const success = await deleteDocument(deleteTarget.id);
     if (success) {
       addToast('success', 'Task deleted', `"${deleteTarget.title}" has been removed.`);
+      refetchTasks();
     } else {
       addToast('error', 'Failed to delete task', 'Please try again.');
     }
     setDeleteTarget(null);
-  }, [deleteTarget, deleteDocument, addToast]);
+  }, [deleteTarget, deleteDocument, addToast, refetchTasks]);
 
   const handleRequestDelete = useCallback((id: string, title: string) => {
     setDeleteTarget({ id, title });
@@ -209,6 +227,7 @@ export default function DeadlinesPage() {
               assigneeName={teamMap[task.assigneeId] ?? 'Unknown'}
               projectName={projectMap[task.projectId]}
               onStatusChange={handleStatusChange}
+              onEdit={setEditTaskTarget}
               onDelete={handleRequestDelete}
             />
           ))}
@@ -310,6 +329,16 @@ export default function DeadlinesPage() {
         onConfirm={handleDeleteTask}
         onCancel={() => setDeleteTarget(null)}
         loading={deletingTask}
+      />
+
+      <EditTaskModal
+        isOpen={!!editTaskTarget}
+        onClose={() => setEditTaskTarget(null)}
+        task={editTaskTarget}
+        projects={projects}
+        team={team}
+        onSubmit={handleEditTask}
+        loading={false}
       />
     </div>
   );

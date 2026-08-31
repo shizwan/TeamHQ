@@ -17,6 +17,7 @@ import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
 import TaskCard from '@/components/tasks/TaskCard';
 import EditMemberModal from '@/components/team/EditMemberModal';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/ui/Pagination';
@@ -39,11 +40,12 @@ export default function TeammateProfilePage() {
   );
 
   const { updateDocument: updateTask } = useUpdateDoc(tasksPath);
-  const { deleteDocument } = useDeleteDoc(tasksPath);
+  const { deleteDocument, loading: deletingTask } = useDeleteDoc(tasksPath);
   const { updateDocument: updateTeamMember, loading: updatingMember } = useUpdateDoc(teamPath);
 
   const [isEditing, setIsEditing] = React.useState(false);
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string } | null>(null);
 
   const activeTasks = useMemo(() => filterActiveTasks(tasks, projects), [tasks, projects]);
   const member = useMemo(() => team.find((m) => m.id === id), [team, id]);
@@ -117,16 +119,23 @@ export default function TeammateProfilePage() {
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
+  const handleConfirmDeleteTask = async () => {
+    if (!deleteTarget) return;
     try {
-      const success = await deleteDocument(taskId);
+      const success = await deleteDocument(deleteTarget.id);
       if (success) {
-        addToast('success', 'Task deleted', 'The task has been successfully removed.');
+        addToast('success', 'Task deleted', `"${deleteTarget.title}" has been successfully removed.`);
         refetchTasks();
       }
     } catch (error) {
       addToast('error', 'Failed to delete task', 'Please try again later.');
+    } finally {
+      setDeleteTarget(null);
     }
+  };
+
+  const handleRequestDelete = (taskId: string, title: string) => {
+    setDeleteTarget({ id: taskId, title });
   };
 
   if (teamLoading || tasksLoading || projectsLoading) {
@@ -334,7 +343,7 @@ export default function TeammateProfilePage() {
                     projectName={projectMap[task.projectId || '']}
                     onStatusChange={handleStatusChange}
                     onEdit={setEditTaskTarget}
-                    onDelete={handleDeleteTask}
+                    onDelete={handleRequestDelete}
                   />
                 ))}
               </div>
@@ -354,6 +363,17 @@ export default function TeammateProfilePage() {
             </div>
           )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this task?"
+        description={`"${deleteTarget?.title}" will be permanently deleted. This action cannot be undone.`}
+        confirmLabel="Delete Task"
+        variant="danger"
+        onConfirm={handleConfirmDeleteTask}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deletingTask}
+      />
 
       <EditMemberModal
         isOpen={isEditing}
