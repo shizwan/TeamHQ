@@ -282,11 +282,11 @@ export default function DashboardPage() {
       </div>
 
       {/* VISUAL CHARTS SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 items-stretch">
+        <div className="lg:col-span-2 flex flex-col">
           <PerformanceBarChart data={teamMatrix} />
         </div>
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 flex flex-col">
           <TaskPieChart tasks={activeTasks} />
         </div>
       </div>

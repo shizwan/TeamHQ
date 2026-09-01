@@ -38,27 +38,30 @@ export default function PerformanceBarChart({ data }: PerformanceBarChartProps) 
   }, [data]);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full">
+      <div className="flex items-center justify-between gap-2 mb-4">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-indigo-600" />
-          Team Performance Overview (Completed vs Active vs Overdue)
+          <BarChart3 className="w-5 h-5 text-indigo-600 shrink-0" />
+          <span>Team Performance Overview (Completed vs Active vs Overdue)</span>
         </h3>
-        <span className="text-xs font-semibold text-slate-400">Task Lifecycle Breakdown per Member</span>
+        <span className="text-xs font-semibold text-slate-400 shrink-0">Task Lifecycle Breakdown per Member</span>
       </div>
 
       {chartData.length === 0 ? (
-        <EmptyState
-          icon={<BarChart3 className="h-12 w-12 text-slate-400" />}
-          title="No performance data"
-          description="Add team members and assign tasks to see performance metrics here."
-        />
+        <div className="flex-1 flex flex-col justify-center min-h-[320px]">
+          <EmptyState
+            icon={<BarChart3 className="h-12 w-12 text-slate-400" />}
+            title="No performance data"
+            description="Add team members and assign tasks to see performance metrics here."
+            className="h-full flex flex-col items-center justify-center"
+          />
+        </div>
       ) : !mounted ? (
-        <div className="h-[350px] w-full flex items-center justify-center bg-slate-50/50 rounded-xl">
+        <div className="h-[350px] min-h-[320px] w-full flex-1 flex items-center justify-center bg-slate-50/50 rounded-xl">
           <span className="text-sm font-medium text-slate-400 animate-pulse">Rendering performance chart...</span>
         </div>
       ) : (
-        <div className="w-full h-[350px]">
+        <div className="w-full h-[350px] min-h-[320px] flex-1">
           <ResponsiveContainer width="100%" height={350}>
             <BarChart
               data={chartData}

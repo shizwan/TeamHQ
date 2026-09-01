@@ -7,6 +7,7 @@ interface EmptyStateProps {
   icon: React.ReactNode;
   title: string;
   description: string;
+  className?: string;
   action?: {
     label: string;
     onClick: () => void;
@@ -18,10 +19,11 @@ export default function EmptyState({
   icon,
   title,
   description,
+  className = '',
   action,
 }: EmptyStateProps) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+    <div className={`rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm ${className}`}>
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center text-slate-300">
         {icon}
       </div>

@@ -61,23 +61,26 @@ export default function TaskPieChart({ metrics: metricsProp, tasks }: TaskPieCha
   const allZero = rawData.length === 0;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full">
+      <div className="flex items-center justify-between gap-2 mb-4">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <PieChartIcon className="w-5 h-5 text-indigo-600" />
-          Deliverables Status Distribution
+          <PieChartIcon className="w-5 h-5 text-indigo-600 shrink-0" />
+          <span>Deliverables Status Distribution</span>
         </h3>
-        <span className="text-xs font-semibold text-slate-400">Total: {metrics.total} Deliverables</span>
+        <span className="text-xs font-semibold text-slate-400 shrink-0">Total: {metrics.total} Deliverables</span>
       </div>
 
       {allZero ? (
-        <EmptyState
-          icon={<PieChartIcon className="h-12 w-12 text-slate-400" />}
-          title="No deliverables yet"
-          description="Create deliverables to see their status distribution here."
-        />
+        <div className="flex-1 flex flex-col justify-center min-h-[320px]">
+          <EmptyState
+            icon={<PieChartIcon className="h-12 w-12 text-slate-400" />}
+            title="No deliverables yet"
+            description="Create deliverables to see their status distribution here."
+            className="h-full flex flex-col items-center justify-center"
+          />
+        </div>
       ) : (
-        <div className="h-80 w-full" role="img" aria-label="Deliverable status distribution pie chart">
+        <div className="h-[350px] min-h-[320px] w-full flex-1" role="img" aria-label="Deliverable status distribution pie chart">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
