@@ -46,7 +46,7 @@ model Workspace {
 model TeamMember {
   id          String    @id @default(uuid())
   workspaceId String    @default("default-workspace")
-  userId      String?
+  userId      String?   @default("admin-user")
   name        String
   role        String
   department  String?
@@ -65,6 +65,7 @@ model TeamMember {
 model Project {
   id          String    @id @default(uuid())
   workspaceId String    @default("default-workspace")
+  userId      String    @default("admin-user")
   title       String
   description String?
   priority    String    @default("High") // 'Critical' | 'High' | 'Medium' | 'Low'
