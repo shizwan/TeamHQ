@@ -38,7 +38,7 @@ export default function PerformanceBarChart({ data }: PerformanceBarChartProps) 
   }, [data]);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full min-w-0">
       <div className="flex items-center justify-between gap-2 mb-4">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-indigo-600 shrink-0" />
@@ -61,7 +61,7 @@ export default function PerformanceBarChart({ data }: PerformanceBarChartProps) 
           <span className="text-sm font-medium text-slate-400 animate-pulse">Rendering performance chart...</span>
         </div>
       ) : (
-        <div className="w-full h-[350px] min-h-[320px] flex-1">
+        <div className="w-full h-[350px] min-h-[320px] flex-1 min-w-0">
           <ResponsiveContainer width="100%" height={350}>
             <BarChart
               data={chartData}

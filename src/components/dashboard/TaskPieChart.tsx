@@ -35,6 +35,12 @@ const STATUS_COLOR_MAP: Record<string, string> = {
 };
 
 export default function TaskPieChart({ metrics: metricsProp, tasks }: TaskPieChartProps) {
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const metrics: TaskMetrics = metricsProp || (tasks ? calculateGlobalTaskMetrics(tasks) : {
     total: 0,
     completed: 0,
@@ -61,7 +67,7 @@ export default function TaskPieChart({ metrics: metricsProp, tasks }: TaskPieCha
   const allZero = rawData.length === 0;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full min-w-0">
       <div className="flex items-center justify-between gap-2 mb-4">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
           <PieChartIcon className="w-5 h-5 text-indigo-600 shrink-0" />
@@ -79,8 +85,12 @@ export default function TaskPieChart({ metrics: metricsProp, tasks }: TaskPieCha
             className="h-full flex flex-col items-center justify-center"
           />
         </div>
+      ) : !mounted ? (
+        <div className="h-[350px] min-h-[320px] w-full flex-1 flex items-center justify-center bg-slate-50/50 rounded-xl">
+          <span className="text-sm font-medium text-slate-400 animate-pulse">Rendering distribution chart...</span>
+        </div>
       ) : (
-        <div className="h-[350px] min-h-[320px] w-full flex-1" role="img" aria-label="Deliverable status distribution pie chart">
+        <div className="h-[350px] min-h-[320px] w-full flex-1 min-w-0" role="img" aria-label="Deliverable status distribution pie chart">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
