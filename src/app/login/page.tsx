@@ -31,7 +31,7 @@ function LoginForm() {
     setLoading(true);
     try {
       await signInWithEmail(email.trim(), password);
-    } catch (err) {
+    } catch {
       // Error handled in AuthContext
     } finally {
       setLoading(false);
@@ -39,16 +39,19 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-4 relative overflow-hidden">
+    <div
+      suppressHydrationWarning
+      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-4 relative overflow-hidden"
+    >
       {/* Background ambient lighting */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" suppressHydrationWarning>
         <div className="absolute -top-1/3 -left-1/3 w-2/3 h-2/3 rounded-full bg-indigo-600/15 blur-[120px]" />
         <div className="absolute -bottom-1/3 -right-1/3 w-2/3 h-2/3 rounded-full bg-purple-600/15 blur-[120px]" />
       </div>
 
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-md" suppressHydrationWarning>
         {/* Brand Header */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-6" suppressHydrationWarning>
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-xl mb-4 bg-slate-900 border border-slate-700/60 p-2.5">
             <div className="relative w-10 h-10 overflow-hidden rounded-xl">
               <Image src="/logo.png" alt="TeamHQ Logo" fill sizes="40px" className="object-cover scale-[1.65]" priority />
@@ -61,11 +64,13 @@ function LoginForm() {
         </div>
 
         {/* Card */}
-        <div className="bg-white/10 backdrop-blur-2xl border border-white/15 rounded-3xl shadow-2xl p-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
+        <div className="bg-white/10 backdrop-blur-2xl border border-white/15 rounded-3xl shadow-2xl p-8" suppressHydrationWarning>
+          <div className="flex items-center justify-between mb-6" suppressHydrationWarning>
+            <div suppressHydrationWarning>
               <h2 className="text-xl font-bold text-white">Manager Sign In</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Enter your credentials to access the scoreboard</p>
+              <p className="text-xs text-slate-400 mt-0.5" suppressHydrationWarning>
+                Enter your credentials to access the scoreboard
+              </p>
             </div>
             <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               <ShieldCheck className="w-5 h-5" />
@@ -80,12 +85,12 @@ function LoginForm() {
           )}
 
           {/* Email/Password Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+          <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
+            <div suppressHydrationWarning>
               <label htmlFor="login-email" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
                 Email Address
               </label>
-              <div className="relative">
+              <div className="relative" suppressHydrationWarning>
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="login-email"
@@ -100,11 +105,11 @@ function LoginForm() {
               </div>
             </div>
 
-            <div>
+            <div suppressHydrationWarning>
               <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
                 Password
               </label>
-              <div className="relative">
+              <div className="relative" suppressHydrationWarning>
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="login-password"
@@ -139,8 +144,8 @@ function LoginForm() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-slate-500 mt-6">
-          © {new Date().getFullYear()} TeamHQ. Secure performance tracking platform.
+        <p className="text-center text-xs text-slate-500 mt-6" suppressHydrationWarning>
+          © 2026 TeamHQ. Secure performance tracking platform.
         </p>
       </div>
     </div>

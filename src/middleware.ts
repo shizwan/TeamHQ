@@ -5,10 +5,11 @@ import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Bypass static assets, favicon, logo, and auth API endpoints
+  // 1. Bypass static assets, favicon, logo, health check, and auth API endpoints
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
+    pathname === '/api/health' ||
     pathname === '/login' ||
     pathname === '/favicon.ico' ||
     pathname === '/logo.png' ||
@@ -34,7 +35,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 4. Protect /api/* routes (excluding /api/auth)
+  // 4. Protect /api/* routes (excluding /api/auth and /api/health)
   if (pathname.startsWith('/api')) {
     if (!user) {
       const response = NextResponse.json(

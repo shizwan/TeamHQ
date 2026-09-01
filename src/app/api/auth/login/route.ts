@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/lib/services/userService';
-import { signSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS, badRequestResponse, unauthorizedResponse } from '@/lib/auth';
+import {
+  signSessionToken,
+  SESSION_COOKIE_NAME,
+  SESSION_DURATION_SECONDS,
+  badRequestResponse,
+  unauthorizedResponse,
+} from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { LoginSchema } from '@/lib/validation/schemas';
 import { logActivity } from '@/lib/services/activityService';
@@ -31,15 +37,15 @@ export async function POST(request: Request) {
     const user = await authenticateUser(email, password);
 
     if (!user) {
-      // Audit failed login
-      await logActivity({
+      // Audit failed login (non-blocking)
+      logActivity({
         actorName: 'Anonymous User',
         actorEmail: email,
         action: 'updated',
         entityType: 'system',
         entityTitle: 'Failed Login Attempt',
         details: `Failed sign-in attempt for email: ${email}`,
-      });
+      }).catch(() => {});
 
       return unauthorizedResponse('Invalid email or password.');
     }
@@ -75,8 +81,8 @@ export async function POST(request: Request) {
       path: '/',
     });
 
-    // Audit successful login
-    await logActivity({
+    // Audit successful login (non-blocking)
+    logActivity({
       userId: user.id,
       actorName: user.name,
       actorEmail: user.email,
@@ -84,13 +90,14 @@ export async function POST(request: Request) {
       entityType: 'system',
       entityTitle: 'User Login',
       details: `${user.name} (${user.role}) logged in successfully.`,
-    });
+    }).catch(() => {});
 
     return response;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[AUTH LOGIN ERROR]', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred during sign in.';
     return NextResponse.json(
-      { error: 'An unexpected error occurred during sign in.', code: 'INTERNAL_ERROR' },
+      { error: message, code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }
