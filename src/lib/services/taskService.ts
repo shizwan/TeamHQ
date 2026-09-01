@@ -45,8 +45,11 @@ export async function getTasks(params: TaskQueryParams = { page: 1, limit: 50 })
   if (search && search.trim()) {
     const q = search.trim();
     where.OR = [
-      { title: { contains: q } },
-      { deliverableId: { contains: q } },
+      { title: { contains: q, mode: 'insensitive' } },
+      { deliverableId: { contains: q, mode: 'insensitive' } },
+      { slipCause: { contains: q, mode: 'insensitive' } },
+      { assignee: { name: { contains: q, mode: 'insensitive' } } },
+      { project: { title: { contains: q, mode: 'insensitive' } } },
     ];
   }
 

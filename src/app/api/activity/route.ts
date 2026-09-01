@@ -27,9 +27,9 @@ export async function GET(request: Request) {
     if (search && search.trim()) {
       const q = search.trim();
       where.OR = [
-        { entityTitle: { contains: q } },
-        { details: { contains: q } },
-        { actorName: { contains: q } },
+        { entityTitle: { contains: q, mode: 'insensitive' } },
+        { details: { contains: q, mode: 'insensitive' } },
+        { actorName: { contains: q, mode: 'insensitive' } },
       ];
     }
 

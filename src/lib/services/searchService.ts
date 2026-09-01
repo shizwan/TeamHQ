@@ -27,15 +27,17 @@ export async function searchAll(
 
   const results: SearchResultItem[] = [];
 
-  // 1. Search Tasks (Deliverables)
+  // 1. Search Tasks (Deliverables) - Case-Insensitive (ILIKE in Postgres)
   if (category === 'all' || category === 'tasks') {
     const tasks = await prisma.task.findMany({
       where: {
         workspaceId,
         OR: [
-          { title: { contains: query } },
-          { deliverableId: { contains: query } },
-          { slipCause: { contains: query } },
+          { title: { contains: query, mode: 'insensitive' } },
+          { deliverableId: { contains: query, mode: 'insensitive' } },
+          { slipCause: { contains: query, mode: 'insensitive' } },
+          { assignee: { name: { contains: query, mode: 'insensitive' } } },
+          { project: { title: { contains: query, mode: 'insensitive' } } },
         ],
       },
       include: {
@@ -61,15 +63,15 @@ export async function searchAll(
     }
   }
 
-  // 2. Search Projects
+  // 2. Search Projects - Case-Insensitive
   if (category === 'all' || category === 'projects') {
     const projects = await prisma.project.findMany({
       where: {
         workspaceId,
         OR: [
-          { title: { contains: query } },
-          { description: { contains: query } },
-          { leadOwner: { contains: query } },
+          { title: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } },
+          { leadOwner: { contains: query, mode: 'insensitive' } },
         ],
       },
       take: limit,
@@ -90,15 +92,15 @@ export async function searchAll(
     }
   }
 
-  // 3. Search Team Members
+  // 3. Search Team Members - Case-Insensitive
   if (category === 'all' || category === 'team') {
     const members = await prisma.teamMember.findMany({
       where: {
         workspaceId,
         OR: [
-          { name: { contains: query } },
-          { role: { contains: query } },
-          { department: { contains: query } },
+          { name: { contains: query, mode: 'insensitive' } },
+          { role: { contains: query, mode: 'insensitive' } },
+          { department: { contains: query, mode: 'insensitive' } },
         ],
       },
       take: limit,
