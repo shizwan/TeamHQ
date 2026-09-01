@@ -67,7 +67,7 @@ function LoginForm() {
         <div className="bg-white/10 backdrop-blur-2xl border border-white/15 rounded-3xl shadow-2xl p-8" suppressHydrationWarning>
           <div className="flex items-center justify-between mb-6" suppressHydrationWarning>
             <div suppressHydrationWarning>
-              <h2 className="text-xl font-bold text-white">Manager Sign In</h2>
+              <h2 className="text-xl font-bold text-white">Sign In</h2>
               <p className="text-xs text-slate-400 mt-0.5" suppressHydrationWarning>
                 Enter your credentials to access the scoreboard
               </p>
