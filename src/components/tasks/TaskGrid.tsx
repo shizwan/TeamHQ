@@ -159,8 +159,20 @@ export default function TaskGrid({
         const assigneeMatch = (teamMap[task.assigneeId] || '').toLowerCase().includes(query);
         const projectMatch = (projectMap[task.projectId] || '').toLowerCase().includes(query);
         const slipMatch = (task.slipCause || '').toLowerCase().includes(query);
-        const labelsStr = Array.isArray(task.labels) ? task.labels.join(' ') : (task.labels || '');
-        const labelsMatch = labelsStr.toLowerCase().includes(query);
+        
+        let labelsStr = '';
+        if (Array.isArray(task.labels)) {
+          labelsStr = task.labels.map((l) => (typeof l === 'string' ? l : String(l ?? ''))).join(' ');
+        } else if (typeof task.labels === 'string') {
+          labelsStr = task.labels;
+        } else if (task.labels && typeof task.labels === 'object') {
+          try {
+            labelsStr = Object.values(task.labels).map((v) => String(v ?? '')).join(' ');
+          } catch {
+            labelsStr = '';
+          }
+        }
+        const labelsMatch = (labelsStr || '').toLowerCase().includes(query);
 
         if (!titleMatch && !dlvMatch && !assigneeMatch && !projectMatch && !slipMatch && !labelsMatch) {
           return false;

@@ -80,8 +80,29 @@ export default function BoardTaskCard({
 
   const overdue = (task.delayHours ?? 0) > 0 || isOverdue(task.targetDueDate || task.dueDate || '', task.status);
   const isCompleted = task.status === 'Completed';
-  const labelsArr: string[] = Array.isArray(task.labels) ? task.labels : typeof task.labels === 'string' ? JSON.parse(task.labels || '[]') : [];
-  const checklistArr = Array.isArray(task.checklist) ? task.checklist : typeof task.checklist === 'string' ? JSON.parse(task.checklist || '[]') : [];
+  let labelsArr: string[] = [];
+  if (Array.isArray(task.labels)) {
+    labelsArr = task.labels;
+  } else if (typeof task.labels === 'string') {
+    try {
+      const parsed = JSON.parse(task.labels);
+      labelsArr = Array.isArray(parsed) ? parsed : [task.labels];
+    } catch {
+      labelsArr = task.labels ? [task.labels] : [];
+    }
+  }
+
+  let checklistArr: any[] = [];
+  if (Array.isArray(task.checklist)) {
+    checklistArr = task.checklist;
+  } else if (typeof task.checklist === 'string') {
+    try {
+      const parsed = JSON.parse(task.checklist);
+      checklistArr = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      checklistArr = [];
+    }
+  }
   const checklistDone = checklistArr.filter((c: any) => c.done).length;
   const checklistTotal = checklistArr.length;
 

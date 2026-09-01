@@ -16,6 +16,20 @@ export interface TaskQueryParams extends z.infer<typeof TaskQuerySchema> {
   workspaceId?: string;
 }
 
+function safeJsonParse<T>(val: any, fallback: T): T {
+  if (!val) return fallback;
+  if (Array.isArray(val)) return val as unknown as T;
+  if (typeof val === 'object') return val as unknown as T;
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return (typeof fallback === 'object' && Array.isArray(fallback) ? [val] : fallback) as unknown as T;
+    }
+  }
+  return fallback;
+}
+
 export async function getTasks(params: TaskQueryParams = { page: 1, limit: 50 }) {
   const { workspaceId = 'default-workspace', projectId, assigneeId, status, slipCause, search, page = 1, limit = 50 } = params;
 
@@ -65,8 +79,8 @@ export async function getTasks(params: TaskQueryParams = { page: 1, limit: 50 })
       delayHours: t.delayHours,
       onTimeStatus: t.onTimeStatus,
       lifecycleStatus: t.lifecycleStatus,
-      labels: t.labels ? (typeof t.labels === 'string' ? JSON.parse(t.labels || '[]') : t.labels) : [],
-      checklist: t.checklist ? (typeof t.checklist === 'string' ? JSON.parse(t.checklist || '[]') : t.checklist) : [],
+      labels: safeJsonParse<string[]>(t.labels, []),
+      checklist: safeJsonParse<{ text: string; done: boolean }[]>(t.checklist, []),
       completedAt: t.completedAt ? t.completedAt.toISOString() : null,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
