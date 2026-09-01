@@ -47,3 +47,6 @@ audit_metrics.ts
 
 # reference data (not app code)
 *.xlsx
+
+.vercel
+.env*
