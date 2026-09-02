@@ -243,7 +243,7 @@ export default function TaskPreviewModal({
               Timeline & Delivery Metrics
             </h3>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div className={`grid grid-cols-2 ${isCompleted ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-3 text-center`}>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[11px] font-semibold text-slate-400 block">Start Date</span>
                 <span className="text-xs sm:text-sm font-bold text-slate-800 mt-1 block truncate">
@@ -260,6 +260,18 @@ export default function TaskPreviewModal({
                   {task.targetDueTime || '10:00 PM'}
                 </span>
               </div>
+
+              {isCompleted && (
+                <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/80">
+                  <span className="text-[11px] font-semibold text-emerald-600 block">Completed At</span>
+                  <span className="text-xs sm:text-sm font-bold text-emerald-900 mt-1 block truncate">
+                    {formatDate(task.completedDate || task.completedAt)}
+                  </span>
+                  <span className="text-[10px] font-medium text-emerald-700 block mt-0.5">
+                    {task.completedTime || '10:00 PM'}
+                  </span>
+                </div>
+              )}
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[11px] font-semibold text-slate-400 block">Days Active</span>

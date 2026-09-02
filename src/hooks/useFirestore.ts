@@ -24,25 +24,27 @@ const fetcher = async (url: string) => {
  * Enhanced useCollection hook powered by SWR caching & deduplication
  */
 export function useCollection<T>(apiEndpoint: string | null) {
-  const { data, error, isLoading, mutate } = useSWR<T[]>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<T[]>(
     apiEndpoint,
     fetcher,
     {
       revalidateOnFocus: true,
-      dedupingInterval: 2000,
-      fallbackData: [],
+      dedupingInterval: 500,
     }
   );
 
   const refetch = useCallback(async () => {
     if (apiEndpoint) {
-      await mutate();
+      await mutate(undefined, { revalidate: true });
     }
   }, [apiEndpoint, mutate]);
 
+  const isInitialLoad = !data && isLoading;
+
   return {
     data: Array.isArray(data) ? data : [],
-    loading: isLoading,
+    loading: isInitialLoad,
+    isValidating,
     error: error ? error.message : null,
     refetch,
     mutate,
@@ -78,9 +80,7 @@ export function useAddDoc(apiEndpoint: string | null) {
 
       const json = await res.json();
       // Invalidate relevant SWR caches
-      globalMutate(apiEndpoint);
-      globalMutate('/api/dashboard/metrics');
-      globalMutate('/api/activity');
+      globalMutate((key) => typeof key === 'string' && (key.startsWith(apiEndpoint) || key.startsWith('/api/dashboard') || key.startsWith('/api/activity')), undefined, { revalidate: true });
       return json.id || json || true;
     } catch (err: any) {
       setError(err.message);
@@ -120,11 +120,12 @@ export function useUpdateDoc(apiEndpoint: string | null) {
         throw new Error(errMsg);
       }
 
-      // Invalidate caches
-      globalMutate(apiEndpoint);
-      globalMutate(`${apiEndpoint}/${id}`);
-      globalMutate('/api/dashboard/metrics');
-      globalMutate('/api/activity');
+      // Invalidate caches across collection, item, dashboard, and activity
+      globalMutate(
+        (key) => typeof key === 'string' && (key.startsWith(apiEndpoint) || key.startsWith('/api/dashboard') || key.startsWith('/api/activity') || key.startsWith('/api/team')),
+        undefined,
+        { revalidate: true }
+      );
       return true;
     } catch (err: any) {
       setError(err.message);
@@ -163,9 +164,11 @@ export function useDeleteDoc(apiEndpoint: string | null) {
       }
 
       // Invalidate caches
-      globalMutate(apiEndpoint);
-      globalMutate('/api/dashboard/metrics');
-      globalMutate('/api/activity');
+      globalMutate(
+        (key) => typeof key === 'string' && (key.startsWith(apiEndpoint) || key.startsWith('/api/dashboard') || key.startsWith('/api/activity')),
+        undefined,
+        { revalidate: true }
+      );
       return true;
     } catch (err: any) {
       setError(err.message);

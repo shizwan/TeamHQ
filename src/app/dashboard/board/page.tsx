@@ -12,6 +12,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TaskBoard from '@/components/tasks/board/TaskBoard';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
+import CompleteTaskModal, { CompletionData } from '@/components/tasks/CompleteTaskModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
 export default function BoardPage() {
@@ -23,7 +24,7 @@ export default function BoardPage() {
   const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
   const teamPath = userId ? getTeamCollectionPath(userId) : null;
 
-  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks, mutate: mutateTasks } = useCollection<Task>(tasksPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
   const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
 
@@ -35,6 +36,7 @@ export default function BoardPage() {
   const [addTaskTargetStatus, setAddTaskTargetStatus] = useState<TaskStatus | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [statusChangeTarget, setStatusChangeTarget] = useState<{ task: Task; newStatus: TaskStatus } | null>(null);
+  const [completeTaskTarget, setCompleteTaskTarget] = useState<Task | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Filter out archived projects & tasks of archived projects
@@ -45,9 +47,58 @@ export default function BoardPage() {
     (taskId: string, newStatus: TaskStatus) => {
       const target = tasks.find((t) => t.id === taskId);
       if (!target || target.status === newStatus) return;
-      setStatusChangeTarget({ task: target, newStatus });
+      if (newStatus === 'Completed') {
+        setCompleteTaskTarget(target);
+      } else {
+        setStatusChangeTarget({ task: target, newStatus });
+      }
     },
     [tasks]
+  );
+
+  const handleConfirmCompleteTask = useCallback(
+    async (taskId: string, completionData: CompletionData) => {
+      setUpdatingStatus(true);
+      const updateData: Partial<Task> = {
+        status: 'Completed',
+        completedDate: completionData.completedDate,
+        completedTime: completionData.completedTime,
+        completedAt: completionData.completedAt,
+        slipCause: completionData.slipCause || 'N/A',
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (mutateTasks) {
+        mutateTasks(
+          (prev = []) =>
+            prev.map((t) =>
+              t.id === taskId
+                ? {
+                    ...t,
+                    ...updateData,
+                    lifecycleStatus: '🟢 On-Time',
+                  }
+                : t
+            ),
+          false
+        );
+      }
+
+      try {
+        const success = await updateDocument(taskId, updateData);
+        if (success) {
+          addToast('success', 'Deliverable completed', 'Task marked as completed with recorded date and time.');
+          await refetchTasks();
+        }
+      } catch {
+        await refetchTasks();
+        addToast('error', 'Failed to complete deliverable', 'Please try again.');
+      } finally {
+        setUpdatingStatus(false);
+        setCompleteTaskTarget(null);
+      }
+    },
+    [updateDocument, addToast, refetchTasks, mutateTasks]
   );
 
   const handleConfirmStatusChange = useCallback(async () => {
@@ -64,21 +115,32 @@ export default function BoardPage() {
       updateData.completedAt = new Date().toISOString();
     } else {
       updateData.completedAt = null;
+      updateData.completedDate = null;
+      updateData.completedTime = null;
+    }
+
+    if (mutateTasks) {
+      mutateTasks(
+        (prev = []) =>
+          prev.map((t) => (t.id === task.id ? { ...t, ...updateData } : t)),
+        false
+      );
     }
 
     try {
       const success = await updateDocument(task.id, updateData);
       if (success) {
         addToast('success', 'Status updated', `"${task.title}" status changed to ${newStatus}.`);
-        refetchTasks();
+        await refetchTasks();
       }
     } catch {
+      await refetchTasks();
       addToast('error', 'Failed to update status', 'Please try again.');
     } finally {
       setUpdatingStatus(false);
       setStatusChangeTarget(null);
     }
-  }, [statusChangeTarget, updateDocument, addToast, refetchTasks]);
+  }, [statusChangeTarget, updateDocument, addToast, refetchTasks, mutateTasks]);
 
   const handleQuickAdd = useCallback((status: TaskStatus) => {
     setAddTaskTargetStatus(status);
@@ -106,12 +168,12 @@ export default function BoardPage() {
     [addTask, addToast, refetchTasks, userId]
   );
 
-  // Quick complete: triggers confirmation popup
+  // Quick complete: triggers completion modal
   const handleQuickComplete = useCallback(
     (taskId: string) => {
       const target = tasks.find((t) => t.id === taskId);
       if (!target || target.status === 'Completed') return;
-      setStatusChangeTarget({ task: target, newStatus: 'Completed' });
+      setCompleteTaskTarget(target);
     },
     [tasks]
   );
@@ -149,7 +211,9 @@ export default function BoardPage() {
     setDeleteTarget({ id, title });
   }, []);
 
-  if (teamLoading || projectsLoading || tasksLoading) {
+  const isInitialLoading = (teamLoading && team.length === 0) || (projectsLoading && projects.length === 0) || (tasksLoading && tasks.length === 0);
+
+  if (isInitialLoading) {
     return <LoadingSpinner message="Loading task board..." />;
   }
 
@@ -171,18 +235,23 @@ export default function BoardPage() {
         onQuickAdd={handleQuickAdd}
       />
 
-      {/* Status Change Confirmation Pop-up */}
+      {/* Complete Deliverable Modal with Date/Time Picker */}
+      <CompleteTaskModal
+        isOpen={!!completeTaskTarget}
+        onClose={() => setCompleteTaskTarget(null)}
+        task={completeTaskTarget}
+        onConfirm={handleConfirmCompleteTask}
+        loading={updatingStatus}
+      />
+
+      {/* Status Change Confirmation Pop-up (for other statuses) */}
       <ConfirmDialog
         open={!!statusChangeTarget}
         title="Change Deliverable Status?"
-        description={
-          statusChangeTarget?.newStatus === 'Completed'
-            ? `Mark "${statusChangeTarget?.task.title}" as Completed? This will record the completion timestamp and compute SLA metrics.`
-            : `Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`
-        }
+        description={`Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`}
         confirmLabel={`Change to ${statusChangeTarget?.newStatus || 'Status'}`}
         cancelLabel="Cancel"
-        variant={statusChangeTarget?.newStatus === 'Completed' ? 'success' : statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
+        variant={statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
         onConfirm={handleConfirmStatusChange}
         onCancel={() => setStatusChangeTarget(null)}
         loading={updatingStatus}

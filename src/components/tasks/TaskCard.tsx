@@ -124,21 +124,29 @@ export default function TaskCard({
         </div>
       </div>
 
-      {/* Dates + overdue badge */}
+      {/* Dates + overdue / completion badge */}
       <div className="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-500">
         <div className="flex items-center gap-2">
-          <span className="w-9 font-semibold text-slate-600 shrink-0">Start:</span>
+          <span className="w-10 font-semibold text-slate-600 shrink-0">Start:</span>
           <span className="truncate">{formatDate(task.startDate)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-9 font-semibold text-slate-600 shrink-0">Due:</span>
+          <span className="w-10 font-semibold text-slate-600 shrink-0">Due:</span>
           <span className="flex-1 truncate">{formatDate(task.targetDueDate || task.dueDate, task.targetDueTime)}</span>
-          {overdue && (
+          {overdue && task.status !== 'Completed' && (
             <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-700 shrink-0">
               Past due
             </span>
           )}
         </div>
+        {task.status === 'Completed' && (
+          <div className="flex items-center gap-2 bg-emerald-50/70 p-1.5 rounded-lg border border-emerald-100">
+            <span className="w-10 font-bold text-emerald-800 shrink-0">Done:</span>
+            <span className="flex-1 truncate font-semibold text-emerald-900">
+              {formatDate(task.completedDate || task.completedAt, task.completedTime)}
+            </span>
+          </div>
+        )}
       </div>
     </article>
   );

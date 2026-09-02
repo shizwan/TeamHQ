@@ -155,20 +155,30 @@ export default function BoardTaskCard({
         {/* Footer: Due date + checklist + Assignee/Actions */}
         <div className="mt-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Due date */}
-            <div
-              className={`flex items-center gap-1 text-[11px] font-medium ${
-                overdue ? 'text-rose-600' : 'text-slate-400'
-              }`}
-            >
-              <Clock className="w-3 h-3" />
-              <span>{formatShortDate(task.targetDueDate || task.dueDate)}</span>
-              {overdue && (
-                <span className="bg-rose-100 text-rose-700 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full">
-                  Late
-                </span>
-              )}
-            </div>
+            {/* Due date or Completed date */}
+            {isCompleted ? (
+              <div 
+                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80" 
+                title={`Completed: ${formatShortDate(task.completedDate || task.completedAt)} at ${task.completedTime || '10:00 PM'}`}
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                <span>Done {formatShortDate(task.completedDate || task.completedAt)} {task.completedTime ? `• ${task.completedTime}` : ''}</span>
+              </div>
+            ) : (
+              <div
+                className={`flex items-center gap-1 text-[11px] font-medium ${
+                  overdue ? 'text-rose-600' : 'text-slate-400'
+                }`}
+              >
+                <Clock className="w-3 h-3" />
+                <span>{formatShortDate(task.targetDueDate || task.dueDate)}</span>
+                {overdue && (
+                  <span className="bg-rose-100 text-rose-700 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full">
+                    Late
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Checklist progress */}
             {checklistTotal > 0 && (

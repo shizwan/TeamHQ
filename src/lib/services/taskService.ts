@@ -5,7 +5,8 @@ import {
   calculateOnTimeStatus, 
   calculateLifecycleStatus, 
   generateNextDeliverableId,
-  enrichTaskMetrics
+  enrichTaskMetrics,
+  parseDateWithTime
 } from '@/lib/trackerEngine';
 import { logActivity } from '@/lib/services/activityService';
 import type { Task, TaskStatus, SlipCause } from '@/types';
@@ -158,10 +159,15 @@ export async function createTask(
     const targetDueTime = data.targetDueTime || '10:00 PM';
     const status = data.status || 'In Progress';
     const slipCause = data.slipCause || 'N/A';
+    const completedDate = data.completedDate ? new Date(data.completedDate) : (status === 'Completed' ? new Date() : null);
+    const completedTime = data.completedTime || (status === 'Completed' ? '10:00 PM' : null);
+    const completedAt = status === 'Completed' 
+      ? (data.completedAt ? new Date(data.completedAt) : (parseDateWithTime(completedDate, completedTime) || new Date())) 
+      : null;
 
-    const daysActive = calculateDaysActive(startDate, null);
-    const delayHours = calculateDelayHours(targetDueDate, targetDueTime, null, null, status);
-    const onTimeStatus = calculateOnTimeStatus(status, targetDueDate, targetDueTime, null, null);
+    const daysActive = calculateDaysActive(startDate, completedDate);
+    const delayHours = calculateDelayHours(targetDueDate, targetDueTime, completedDate, completedTime, status);
+    const onTimeStatus = calculateOnTimeStatus(status, targetDueDate, targetDueTime, completedDate, completedTime);
     const lifecycleStatus = calculateLifecycleStatus(status, onTimeStatus, slipCause, delayHours);
 
     const labelsStr = typeof data.labels === 'string' ? data.labels : JSON.stringify(data.labels || []);
@@ -180,13 +186,15 @@ export async function createTask(
         startDate,
         targetDueDate,
         targetDueTime,
+        completedDate,
+        completedTime,
         daysActive,
         delayHours,
         onTimeStatus,
         lifecycleStatus,
         labels: labelsStr,
         checklist: checklistStr,
-        completedAt: status === 'Completed' ? new Date() : null,
+        completedAt,
       },
     });
 
@@ -214,6 +222,8 @@ export async function createTask(
           status,
           targetDueDate: data.targetDueDate,
           targetDueTime,
+          completedDate: data.completedDate,
+          completedTime,
         }),
       },
     });
@@ -258,10 +268,27 @@ export async function updateTask(
 
     // Handle completion date & timestamp transitions
     const newStatus = data.status || existing.status;
-    if (data.status === 'Completed' && existing.status !== 'Completed') {
-      updateData.completedAt = new Date();
-      updateData.completedDate = new Date();
-      updateData.completedTime = data.completedTime || '10:00 PM';
+    if (newStatus === 'Completed') {
+      if (data.completedDate !== undefined) {
+        updateData.completedDate = data.completedDate ? new Date(data.completedDate) : new Date();
+      } else if (!existing.completedDate) {
+        updateData.completedDate = new Date();
+      }
+
+      if (data.completedTime !== undefined) {
+        updateData.completedTime = data.completedTime;
+      } else if (!existing.completedTime) {
+        updateData.completedTime = '10:00 PM';
+      }
+
+      const effCompDate = updateData.completedDate !== undefined ? updateData.completedDate : existing.completedDate;
+      const effCompTime = updateData.completedTime !== undefined ? updateData.completedTime : existing.completedTime;
+
+      if (data.completedAt !== undefined) {
+        updateData.completedAt = data.completedAt ? new Date(data.completedAt) : (parseDateWithTime(effCompDate, effCompTime) || new Date());
+      } else {
+        updateData.completedAt = parseDateWithTime(effCompDate, effCompTime) || new Date();
+      }
     } else if (data.status && data.status !== 'Completed' && existing.status === 'Completed') {
       updateData.completedAt = null;
       updateData.completedDate = null;

@@ -5,6 +5,7 @@ import { X, Loader2 } from 'lucide-react';
 import type { TeamMember, Project, Task, TaskStatus, SlipCause } from '@/types';
 import { TASK_STATUSES, SLIP_CAUSES, TIME_SLOTS, MAX_TITLE_LENGTH } from '@/types';
 import { sanitizeString } from '@/lib/validation';
+import { time12To24, time24To12, parseDateWithTime } from '@/lib/trackerEngine';
 
 interface EditTaskModalProps {
   isOpen: boolean;
@@ -31,6 +32,8 @@ export default function EditTaskModal({
   const [startDate, setStartDate] = useState('');
   const [targetDueDate, setTargetDueDate] = useState('');
   const [targetDueTime, setTargetDueTime] = useState('10:00 PM');
+  const [completedDate, setCompletedDate] = useState('');
+  const [completedTime, setCompletedTime] = useState('10:00 PM');
   const [status, setStatus] = useState<TaskStatus>('In Progress');
   const [slipCause, setSlipCause] = useState<SlipCause>('N/A');
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +62,20 @@ export default function EditTaskModal({
             setTargetDueDate(d.toISOString().split('T')[0]);
           }
         }
+        if (task.completedDate) {
+          const c = new Date(task.completedDate);
+          if (!isNaN(c.getTime())) {
+            setCompletedDate(c.toISOString().split('T')[0]);
+          }
+        } else if (task.completedAt) {
+          const c = new Date(task.completedAt);
+          if (!isNaN(c.getTime())) {
+            setCompletedDate(c.toISOString().split('T')[0]);
+          }
+        } else {
+          setCompletedDate(new Date().toISOString().split('T')[0]);
+        }
+        setCompletedTime(task.completedTime || '10:00 PM');
       } catch (e) {}
     }
   }, [task, isOpen]);
@@ -95,6 +112,8 @@ export default function EditTaskModal({
         if (!isNaN(d.getTime())) parsedDue = d.toISOString();
       }
 
+      const isComp = status === 'Completed';
+
       await onSubmit(task.id, {
         projectId,
         title: sanitizeString(title),
@@ -105,6 +124,9 @@ export default function EditTaskModal({
         targetDueTime,
         status,
         slipCause,
+        completedDate: isComp ? completedDate : null,
+        completedTime: isComp ? completedTime : null,
+        completedAt: isComp ? (parseDateWithTime(completedDate, completedTime)?.toISOString() || new Date().toISOString()) : null,
         updatedAt: new Date().toISOString(),
       });
 
@@ -266,6 +288,50 @@ export default function EditTaskModal({
               </select>
             </div>
           </div>
+
+          {/* Completion Timestamp (Shown when Completed) */}
+          {status === 'Completed' && (
+            <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                  Completion Timestamp
+                </span>
+                <span className="text-[11px] text-emerald-600 font-medium">
+                  (Adjust actual delivery date & time)
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Completion Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required={status === 'Completed'}
+                    value={completedDate}
+                    onChange={(e) => setCompletedDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Completion Time <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={time12To24(completedTime)}
+                      onChange={(e) => setCompletedTime(time24To12(e.target.value))}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    />
+                    <span className="shrink-0 px-2.5 py-2 bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl">
+                      {completedTime}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-rose-600 font-medium bg-rose-50 p-3 rounded-xl border border-rose-100" role="alert">

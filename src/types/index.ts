@@ -131,6 +131,9 @@ export interface NewTaskForm {
   targetDueTime?: string;
   status: TaskStatus;
   slipCause?: SlipCause;
+  completedDate?: string | null;
+  completedTime?: string | null;
+  completedAt?: string | null;
   labels?: string[];
   checklist?: ChecklistItem[];
 }

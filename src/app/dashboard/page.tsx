@@ -26,6 +26,7 @@ import Header from '@/components/layout/Header';
 import MetricCard from '@/components/dashboard/MetricCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
+import CompleteTaskModal, { CompletionData } from '@/components/tasks/CompleteTaskModal';
 import PerformanceBarChart from '@/components/dashboard/PerformanceBarChart';
 import TaskPieChart from '@/components/dashboard/TaskPieChart';
 import { usePagination } from '@/hooks/usePagination';
@@ -46,6 +47,8 @@ export default function DashboardPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [selectedSlipCause, setSelectedSlipCause] = useState<string>('All');
   const [previewTaskTarget, setPreviewTaskTarget] = useState<Task | null>(null);
+  const [completeTaskTarget, setCompleteTaskTarget] = useState<Task | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Filter out archived projects & tasks belonging to archived projects
   const activeProjects = useMemo(() => projects.filter((p) => p.status !== 'Archived'), [projects]);
@@ -116,7 +119,9 @@ export default function DashboardPage() {
     setSelectedSlipCause('All');
   };
 
-  if (teamLoading || projectsLoading || tasksLoading) {
+  const isInitialLoading = (teamLoading && team.length === 0) || (projectsLoading && projects.length === 0) || (tasksLoading && tasks.length === 0);
+
+  if (isInitialLoading) {
     return <LoadingSpinner fullScreen message="Crunching deliverable metrics & ETA tracking..." />;
   }
 
@@ -384,6 +389,7 @@ export default function DashboardPage() {
                   <th className="py-3 px-3">Start Date</th>
                   <th className="py-3 px-3">Target ETA</th>
                   <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Completed At</th>
                   <th className="py-3 px-3">Slip Cause</th>
                   <th className="py-3 px-3 text-center">Days Active</th>
                   <th className="py-3 px-3 text-center">Delay (Hrs)</th>
@@ -433,6 +439,19 @@ export default function DashboardPage() {
                           }`}>
                           {t.status}
                         </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        {t.status === 'Completed' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200" title={`Completed at ${t.completedTime || '10:00 PM'}`}>
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span>{t.completedDate ? new Date(t.completedDate).toLocaleDateString() : (t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '-')}</span>
+                            <span className="text-emerald-700 font-semibold text-[10px]">
+                              {t.completedTime || (t.completedAt ? new Date(t.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 font-normal">-</span>
+                        )}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${(t.slipCause && t.slipCause !== 'N/A') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'text-slate-400'
@@ -496,15 +515,54 @@ export default function DashboardPage() {
         projects={activeProjects}
         team={team}
         onStatusChange={async (taskId, newStatus) => {
-          const updateData: Partial<Task> = {
-            status: newStatus,
-          };
-          await updateTask(taskId, updateData);
-          refetchTasks();
-          if (previewTaskTarget && previewTaskTarget.id === taskId) {
-            setPreviewTaskTarget((prev) => prev ? { ...prev, ...updateData } : null);
+          const target = tasks.find((t) => t.id === taskId);
+          if (!target) return;
+          if (newStatus === 'Completed') {
+            setCompleteTaskTarget(target);
+          } else {
+            const updateData: Partial<Task> = {
+              status: newStatus,
+              completedAt: null,
+              completedDate: null,
+              completedTime: null,
+              updatedAt: new Date().toISOString(),
+            };
+            await updateTask(taskId, updateData);
+            refetchTasks();
+            if (previewTaskTarget && previewTaskTarget.id === taskId) {
+              setPreviewTaskTarget((prev) => prev ? { ...prev, ...updateData } : null);
+            }
           }
         }}
+      />
+
+      {/* Complete Deliverable Modal with Date/Time Picker */}
+      <CompleteTaskModal
+        isOpen={!!completeTaskTarget}
+        onClose={() => setCompleteTaskTarget(null)}
+        task={completeTaskTarget}
+        onConfirm={async (taskId, completionData: CompletionData) => {
+          setUpdatingStatus(true);
+          try {
+            const updateData = {
+              status: 'Completed' as const,
+              completedDate: completionData.completedDate,
+              completedTime: completionData.completedTime,
+              completedAt: completionData.completedAt,
+              slipCause: completionData.slipCause || 'N/A',
+              updatedAt: new Date().toISOString(),
+            };
+            await updateTask(taskId, updateData);
+            refetchTasks();
+            if (previewTaskTarget && previewTaskTarget.id === taskId) {
+              setPreviewTaskTarget((prev) => prev ? { ...prev, ...updateData } : null);
+            }
+          } finally {
+            setUpdatingStatus(false);
+            setCompleteTaskTarget(null);
+          }
+        }}
+        loading={updatingStatus}
       />
     </>
   );

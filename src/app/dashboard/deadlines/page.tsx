@@ -11,6 +11,7 @@ import Header from '@/components/layout/Header';
 import TaskCard from '@/components/tasks/TaskCard';
 import EditTaskModal from '@/components/tasks/EditTaskModal';
 import TaskPreviewModal from '@/components/tasks/TaskPreviewModal';
+import CompleteTaskModal, { CompletionData } from '@/components/tasks/CompleteTaskModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Calendar, AlertCircle, Clock, CalendarDays } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function DeadlinesPage() {
   const projectsPath = userId ? getProjectsCollectionPath(userId) : null;
 
   const { data: team, loading: teamLoading } = useCollection<TeamMember>(teamPath);
-  const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useCollection<Task>(tasksPath);
+  const { data: tasks, loading: tasksLoading, refetch: refetchTasks, mutate: mutateTasks } = useCollection<Task>(tasksPath);
   const { data: projects, loading: projectsLoading } = useCollection<Project>(projectsPath);
   
   const { updateDocument, loading: updatingTask } = useUpdateDoc(tasksPath);
@@ -39,6 +40,7 @@ export default function DeadlinesPage() {
   const [editTaskTarget, setEditTaskTarget] = React.useState<Task | null>(null);
   const [previewTaskTarget, setPreviewTaskTarget] = React.useState<Task | null>(null);
   const [statusChangeTarget, setStatusChangeTarget] = useState<{ task: Task; newStatus: TaskStatus } | null>(null);
+  const [completeTaskTarget, setCompleteTaskTarget] = useState<Task | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [nowTime, setNowTime] = useState<number>(() => Date.now());
   const [activeTab, setActiveTab] = React.useState<'overdue' | 'today' | 'week' | 'upcoming'>('overdue');
@@ -72,9 +74,58 @@ export default function DeadlinesPage() {
     (taskId: string, newStatus: TaskStatus) => {
       const target = tasks.find((t) => t.id === taskId);
       if (!target || target.status === newStatus) return;
-      setStatusChangeTarget({ task: target, newStatus });
+      if (newStatus === 'Completed') {
+        setCompleteTaskTarget(target);
+      } else {
+        setStatusChangeTarget({ task: target, newStatus });
+      }
     },
     [tasks]
+  );
+
+  const handleConfirmCompleteTask = useCallback(
+    async (taskId: string, completionData: CompletionData) => {
+      setUpdatingStatus(true);
+      const updateData: Partial<Task> = {
+        status: 'Completed',
+        completedDate: completionData.completedDate,
+        completedTime: completionData.completedTime,
+        completedAt: completionData.completedAt,
+        slipCause: completionData.slipCause || 'N/A',
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (mutateTasks) {
+        mutateTasks(
+          (prev = []) =>
+            prev.map((t) =>
+              t.id === taskId
+                ? {
+                    ...t,
+                    ...updateData,
+                    lifecycleStatus: '🟢 On-Time',
+                  }
+                : t
+            ),
+          false
+        );
+      }
+
+      try {
+        const success = await updateDocument(taskId, updateData);
+        if (success) {
+          addToast('success', 'Deliverable completed', 'Task marked as completed with recorded date and time.');
+          await refetchTasks();
+        }
+      } catch {
+        await refetchTasks();
+        addToast('error', 'Failed to complete deliverable', 'Please try again.');
+      } finally {
+        setUpdatingStatus(false);
+        setCompleteTaskTarget(null);
+      }
+    },
+    [updateDocument, addToast, refetchTasks, mutateTasks]
   );
 
   const handleConfirmStatusChange = useCallback(async () => {
@@ -91,21 +142,32 @@ export default function DeadlinesPage() {
       updateData.completedAt = new Date().toISOString();
     } else {
       updateData.completedAt = null;
+      updateData.completedDate = null;
+      updateData.completedTime = null;
+    }
+
+    if (mutateTasks) {
+      mutateTasks(
+        (prev = []) =>
+          prev.map((t) => (t.id === task.id ? { ...t, ...updateData } : t)),
+        false
+      );
     }
 
     try {
       const success = await updateDocument(task.id, updateData);
       if (success) {
         addToast('success', 'Status updated', `"${task.title}" status changed to ${newStatus}.`);
-        refetchTasks();
+        await refetchTasks();
       }
     } catch {
+      await refetchTasks();
       addToast('error', 'Failed to update status', 'Please try again.');
     } finally {
       setUpdatingStatus(false);
       setStatusChangeTarget(null);
     }
-  }, [statusChangeTarget, updateDocument, addToast, refetchTasks]);
+  }, [statusChangeTarget, updateDocument, addToast, refetchTasks, mutateTasks]);
 
   const handleEditTask = useCallback(
     async (taskId: string, data: Partial<Task>) => {
@@ -211,7 +273,9 @@ export default function DeadlinesPage() {
     goToPage(1);
   }, [activeTab, goToPage]);
 
-  if (teamLoading || tasksLoading || projectsLoading) {
+  const isInitialLoading = (teamLoading && team.length === 0) || (projectsLoading && projects.length === 0) || (tasksLoading && tasks.length === 0);
+
+  if (isInitialLoading) {
     return <LoadingSpinner message="Loading deadlines..." />;
   }
 
@@ -340,18 +404,23 @@ export default function DeadlinesPage() {
         'No upcoming tasks scheduled yet.'
       )}
 
-      {/* Status Change Confirmation Pop-up */}
+      {/* Complete Deliverable Modal with Date/Time Picker */}
+      <CompleteTaskModal
+        isOpen={!!completeTaskTarget}
+        onClose={() => setCompleteTaskTarget(null)}
+        task={completeTaskTarget}
+        onConfirm={handleConfirmCompleteTask}
+        loading={updatingStatus}
+      />
+
+      {/* Status Change Confirmation Pop-up (for other statuses) */}
       <ConfirmDialog
         open={!!statusChangeTarget}
         title="Change Deliverable Status?"
-        description={
-          statusChangeTarget?.newStatus === 'Completed'
-            ? `Mark "${statusChangeTarget?.task.title}" as Completed? This will record the completion timestamp and compute SLA metrics.`
-            : `Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`
-        }
+        description={`Are you sure you want to change the status of "${statusChangeTarget?.task.title}" from "${statusChangeTarget?.task.status}" to "${statusChangeTarget?.newStatus}"?`}
         confirmLabel={`Change to ${statusChangeTarget?.newStatus || 'Status'}`}
         cancelLabel="Cancel"
-        variant={statusChangeTarget?.newStatus === 'Completed' ? 'success' : statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
+        variant={statusChangeTarget?.newStatus === 'Blocked' ? 'danger' : 'info'}
         onConfirm={handleConfirmStatusChange}
         onCancel={() => setStatusChangeTarget(null)}
         loading={updatingStatus}

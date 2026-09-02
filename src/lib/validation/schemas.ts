@@ -53,6 +53,9 @@ export const CreateTaskSchema = z.object({
   startDate: z.string().optional().nullable(),
   targetDueDate: z.string().optional().nullable(),
   targetDueTime: z.string().optional().default('10:00 PM'),
+  completedDate: z.string().optional().nullable(),
+  completedTime: z.string().optional().nullable(),
+  completedAt: z.string().optional().nullable(),
   labels: z.union([z.array(z.string()), z.string()]).optional().default([]),
   checklist: z.union([z.array(z.object({ text: z.string(), done: z.boolean() })), z.string()]).optional().default([]),
 });

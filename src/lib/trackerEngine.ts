@@ -80,6 +80,31 @@ export function formatTimeString(dateInput?: string | Date | null): string {
 }
 
 /**
+ * Converts a 12-hour time string (e.g. "03:45 PM" or "10:00 AM") to 24-hour "HH:mm" (e.g. "15:45")
+ */
+export function time12To24(time12?: string | null): string {
+  if (!time12) return '22:00';
+  const { hours, minutes } = parseTimeString(time12);
+  const hh = hours < 10 ? '0' + hours : String(hours);
+  const mm = minutes < 10 ? '0' + minutes : String(minutes);
+  return `${hh}:${mm}`;
+}
+
+/**
+ * Converts a 24-hour time string (e.g. "15:45") or any time string to 12-hour "hh:mm A" (e.g. "03:45 PM")
+ */
+export function time24To12(time24?: string | null): string {
+  if (!time24) return '10:00 PM';
+  const { hours, minutes } = parseTimeString(time24);
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  let h = hours % 12;
+  if (h === 0) h = 12;
+  const hh = h < 10 ? '0' + h : String(h);
+  const mm = minutes < 10 ? '0' + minutes : String(minutes);
+  return `${hh}:${mm} ${ampm}`;
+}
+
+/**
  * Parses date input and target time slot into a precise, timezone-consistent Date object.
  */
 export function parseDateWithTime(
