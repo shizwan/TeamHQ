@@ -7,14 +7,14 @@ import { NextResponse } from 'next/server';
  */
 export async function GET() {
   return NextResponse.json(
-    { error: 'Method not allowed. Run npm run seed from an authorized environment.' },
-    { status: 405, headers: { Allow: 'GET, POST' } }
+    { error: 'HTTP database seeding is disabled. Run npm run seed from an authorized environment.' },
+    { status: 403 }
   );
 }
 
 export async function POST() {
   return NextResponse.json(
-    { error: 'Method not allowed. Run npm run seed from an authorized environment.' },
-    { status: 405, headers: { Allow: 'GET, POST' } }
+    { error: 'HTTP database seeding is disabled. Run npm run seed from an authorized environment.' },
+    { status: 403 }
   );
 }
