@@ -8,7 +8,10 @@ async function main() {
 
   try {
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@teamhq.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'password';
+    const adminPassword = process.env.ADMIN_PASSWORD?.trim();
+    if (!adminPassword || adminPassword.length < 12) {
+      throw new Error('ADMIN_PASSWORD must be set to a strong password of at least 12 characters before seeding.');
+    }
 
     const result = await seedDatabase(adminEmail, adminPassword);
     console.log(`✔ Workspace and Admin User setup complete: ${result.adminUser.email}`);

@@ -84,7 +84,17 @@ export const INITIAL_DELIVERABLES = [
   { dlv_id: "DLV-000045", member: "Danish", project: "Rentigo", title: "Rentigo Frontend Development & Ongoing Enhancements", start_date: "2026-08-21", target_date: null, target_time: "10:00 PM", status: "In Progress", slip_cause: "N/A", comp_date: null, comp_time: "10:00 PM" }
 ];
 
-export async function seedDatabase(adminEmail = 'admin@teamhq.com', adminPassword = 'password') {
+export async function seedDatabase(adminEmail: string, adminPassword: string) {
+  // This is a destructive demo-data reset, not a production migration.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Demo seeding is disabled in production.');
+  }
+  if (process.env.CONFIRM_DEMO_SEED !== 'YES_DELETE_WORKSPACE_DATA') {
+    throw new Error('Set CONFIRM_DEMO_SEED=YES_DELETE_WORKSPACE_DATA to acknowledge that demo seeding deletes workspace data.');
+  }
+  if (!adminPassword || adminPassword.length < 12) {
+    throw new Error('ADMIN_PASSWORD must be at least 12 characters for demo seeding.');
+  }
   const workspaceId = 'default-workspace';
 
   return await prisma.$transaction(async (tx) => {
