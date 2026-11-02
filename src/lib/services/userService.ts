@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { hashPassword, verifyPassword } from '@/lib/auth';
-import { getEnv, isProduction } from '@/lib/env';
+import { getEnv } from '@/lib/env';
 import type { z } from 'zod';
 import type { CreateUserSchema, UpdateUserSchema } from '@/lib/validation/schemas';
 import type { UserRole } from '@/lib/security';
@@ -116,7 +116,8 @@ export async function authenticateUser(
   const normalized = email.trim().toLowerCase();
   const env = getEnv();
   const configuredAdminEmail = (env.ADMIN_EMAIL || 'admin@teamhq.com').trim().toLowerCase();
-  const configuredAdminPassword = env.ADMIN_PASSWORD || (isProduction() ? undefined : 'admin123');
+  // Bootstrap requires explicit operator-provided credentials in all environments.
+  const configuredAdminPassword = env.ADMIN_PASSWORD?.trim();
 
   let user = await prisma.user.findUnique({
     where: { email: normalized },
