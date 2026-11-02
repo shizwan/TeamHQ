@@ -24,8 +24,8 @@ export function resolveAuthSecret(rawSecret: string | undefined, nodeEnv: string
     if (!configured || configured.length < 32) {
       throw new Error('AUTH_SECRET must be configured with at least 32 random characters in production.');
     }
-    if (configured === LOCAL_ONLY_AUTH_SECRET) {
-      throw new Error('The development-only AUTH_SECRET may not be used in production.');
+    if (configured === LOCAL_ONLY_AUTH_SECRET || configured === 'teamhq_production_secret_fallback_key_32_chars!') {
+      throw new Error('A documented or development-only AUTH_SECRET may not be used in production.');
     }
     return configured;
   }
